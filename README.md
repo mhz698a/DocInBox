@@ -79,7 +79,6 @@ Este modo no genera túnel y no permite recibir archivos desde otros dispositivo
 
 | Variable | Valor predeterminado | Descripción |
 |---|---:|---|
-| DOCINBOX_HOST | 127.0.0.1 | Interfaz privada donde escucha Flask. |
 | DOCINBOX_PORT | 8765 | Puerto TCP local. |
 | DOCINBOX_MAX_UPLOAD_MB | 100 | Tamaño máximo por archivo. |
 | DOCINBOX_DATA_DIR | Directorio de datos del usuario | Directorio base local. |
