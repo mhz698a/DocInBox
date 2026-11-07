@@ -15,8 +15,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 
 _DOMAIN_PATTERN = re.compile(
-    r"(?<![a-z0-9.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+"
-    r"(?:localhost\\.run|lhr\\.life))(?![a-z0-9.-])",
+    r"(?<![a-z0-9.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"(?:localhost\.run|lhr\.life))(?![a-z0-9.-])",
     re.IGNORECASE,
 )
 

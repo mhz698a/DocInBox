@@ -58,7 +58,7 @@ class MainWindow(QMainWindow):
         self.server_thread: LanServerThread | None = None
         self.localhostrun_thread: LocalhostRunTunnelThread | None = None
         self.access_token = ""
-        self._last_localhostrun_error = ""
+        self._last_tunnel_error = ""
         self._last_server_error = ""
         self._server_stop_pending = False
 
@@ -313,7 +313,7 @@ class MainWindow(QMainWindow):
         )
 
     def _localhostrun_error(self, message: str) -> None:
-        self._last_localhostrun_error = message
+        self._last_tunnel_error = message
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
         self.qr_widget.set_connection(None)
@@ -332,7 +332,7 @@ class MainWindow(QMainWindow):
             return
 
         if self.server_thread and self.server_thread.isRunning():
-            if self._last_localhostrun_error:
+            if self._last_tunnel_error:
                 self.status_label.setText(
                     "Receptor privado activo · el túnel localhost.run no está disponible."
                 )

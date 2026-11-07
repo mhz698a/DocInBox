@@ -55,7 +55,6 @@ class Config:
         )
     ).expanduser()
 
-    LOCALHOSTRUN_SSH_HOST = "localhost.run"
     LOCALHOSTRUN_SSH_PORT = _positive_int(
         "DOCINBOX_LOCALHOSTRUN_SSH_PORT",
         22,
