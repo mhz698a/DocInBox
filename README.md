@@ -1,6 +1,6 @@
 # DocInBox — Recepción y administración de documentos
 
-DocInBox recibe documentos desde teléfonos y computadoras y permite administrarlos desde una aplicación de escritorio PyQt6. Flask escucha exclusivamente en localhost y Serveo proporciona la dirección pública HTTPS.
+DocInBox recibe documentos desde teléfonos y computadoras y permite administrarlos desde una aplicación de escritorio PyQt6. Flask escucha exclusivamente en localhost y localhost.run proporciona una dirección HTTPS pública temporal.
 
 ## Funcionalidad
 
@@ -23,35 +23,34 @@ El botón Permitir tipo de archivos abre una lista de casillas configurables. Lo
 
 Extensiones disponibles: doc, docx, xlsx, xls, ppt, pptx, pdf, png, jpg, jpeg, gif, txt, mp3, wav, flac, m4a, mp4, mkv y avi.
 
-### Serveo SSH
+### Túnel SSH mediante localhost.run
 - Se inicia automáticamente al arrancar el receptor.
 - Flask escucha únicamente en 127.0.0.1; no se enlaza a la interfaz de red local.
 - OpenSSH ejecuta el túnel dentro de un QThread y sin abrir una ventana de consola.
-- El QR muestra exclusivamente una URL HTTPS pública de Serveo.
-- La integración solicita un subdominio reservado aleatorio y exige una identidad SSH registrada. No utiliza túneles anónimos, porque Serveo indica que los túneles anónimos pueden revelar la IP de origen en el subdominio y en cabeceras HTTP.
-- Se verifica la huella Ed25519 del servidor Serveo antes de permitir la conexión. Si la huella no coincide, no se abre el túnel.
-- La página y POST /api/upload están protegidos por una clave temporal. Si la autenticación SSH o el túnel fallan, no se muestra una URL local ni se hace fallback a un túnel anónimo.
+- Se usa el usuario documentado nokey@localhost.run para el plan gratuito; no se generan claves SSH de usuario ni se requiere registro.
+- El QR muestra exclusivamente la URL HTTPS temporal anunciada por localhost.run.
+- Se aceptan los dominios gratuitos documentados bajo localhost.run y lhr.life; la dirección se detecta desde la salida de SSH.
+- La clave del servidor SSH se conserva mediante StrictHostKeyChecking=accept-new: la primera conexión se recuerda automáticamente y los cambios posteriores se rechazan.
+- Se desactiva la inyección de cabeceras HTTP de proxy. La página y POST /api/upload siguen protegidos por una clave temporal de DocInBox.
+- Si falla la conexión, el receptor permanece privado y no muestra la dirección local.
 
-La clave pública SSH se genera una sola vez en el directorio de datos de DocInBox. En el primer inicio, la ventana muestra la clave y abre la consola de Serveo para que se registre. La clave privada permanece en el equipo. Si se elimina o sustituye, será necesario registrar la nueva clave.
+Los dominios gratuitos son temporales y pueden cambiar regularmente o después de unas horas. DocInBox vuelve a generar el QR con la dirección que entrega cada nueva conexión. La IP pública de origen sigue siendo visible para localhost.run como proveedor del túnel; los dispositivos que escanean el QR solo reciben la dirección pública y nunca la IP local del equipo.
 
-Con cuentas gratuitas o túneles anónimos, Serveo puede mostrar una pantalla intermedia de advertencia al visitante. Si aparece, el destinatario debe continuar para llegar al formulario. Los túneles HTTP de cuentas de pago no muestran esa pantalla.
-
-Documentación de Serveo:
-- https://serveo.net/docs/
-- https://serveo.net/terms/
-
+Documentación oficial:
+- https://localhost.run/docs
+- https://localhost.run/docs/faq
+- https://localhost.run/docs/security
+- https://localhost.run/docs/cli
 ## Requisitos
 
 - Python 3.12 o compatible.
 - Flask, PyQt6 y PyMuPDF.
 - qrcode con Pillow.
-- OpenSSH Client (ssh, ssh-keygen y ssh-keyscan).
+- OpenSSH Client (ssh.exe).
 
 En Windows, OpenSSH Client puede instalarse desde Características opcionales. Verifica su disponibilidad con:
 
     ssh -V
-    ssh-keygen -?
-    ssh-keyscan -?
 
 Instala las dependencias Python:
 
@@ -61,7 +60,7 @@ Instala las dependencias Python:
 
     python app.py
 
-La aplicación inicia Flask en localhost y crea automáticamente el túnel SSH. En el primer inicio, registra la clave pública que aparece en el diálogo de configuración de Serveo. Cuando el túnel se confirme, aparecerá el QR público.
+La aplicación inicia Flask en localhost y crea automáticamente el túnel SSH sin cuenta ni registro. Cuando localhost.run anuncie la dirección HTTPS temporal, aparecerá el QR público.
 
 Para iniciar únicamente Flask en modo de desarrollo local:
 
@@ -73,9 +72,7 @@ Este modo no genera túnel y no permite recibir archivos desde otros dispositivo
 
 - Documentos: %LOCALAPPDATA%/DocInBox/Received
 - Base de datos: %LOCALAPPDATA%/DocInBox/inbox.sqlite3
-- Identidad SSH: %LOCALAPPDATA%/DocInBox/ssh/docinbox_ed25519
-- Clave pública: %LOCALAPPDATA%/DocInBox/ssh/docinbox_ed25519.pub
-- Huella conocida del servidor: %LOCALAPPDATA%/DocInBox/ssh/known_hosts
+- Clave de host SSH aprendida en la primera conexión: %LOCALAPPDATA%/DocInBox/ssh/localhostrun_known_hosts
 
 ## Variables de entorno
 
@@ -86,8 +83,7 @@ Este modo no genera túnel y no permite recibir archivos desde otros dispositivo
 | DOCINBOX_DATA_DIR | Directorio de datos del usuario | Directorio base local. |
 | DOCINBOX_STORAGE_DIR | DATA_DIR/Received | Carpeta de archivos recibidos. |
 | DOCINBOX_DATABASE_PATH | DATA_DIR/inbox.sqlite3 | Base de datos SQLite. |
-| DOCINBOX_SERVEO_SSH_KEY | DATA_DIR/ssh/docinbox_ed25519 | Ruta alternativa a una clave SSH registrada. |
-| DOCINBOX_SERVEO_SSH_PORT | 22 | Puerto SSH de Serveo. |
+| DOCINBOX_LOCALHOSTRUN_SSH_PORT | 22 | Puerto SSH de localhost.run. |
 
 ## API inicial
 
@@ -109,16 +105,14 @@ Las extensiones no habilitadas reciben HTTP 415. Los archivos mayores al límite
 
 ## Seguridad
 
-El servidor Flask no escucha en la IP LAN: solo en loopback. La dirección pública es proporcionada por Serveo y el acceso al formulario requiere una clave temporal. El túnel es HTTPS en el extremo público y SSH entre el equipo receptor y Serveo; el tráfico termina en el proxy público antes de reenviarse al servidor local.
-
-La identidad SSH debe estar registrada en Serveo. No se debe desactivar la verificación de la huella del host ni recurrir a un túnel anónimo para solventar errores de autenticación. Si la conexión falla, el receptor permanece privado.
+El servidor Flask no escucha en la IP LAN: solo en loopback. La dirección pública es proporcionada por localhost.run y el acceso al formulario requiere una clave temporal. La URL HTTPS termina TLS en el proxy de localhost.run y el tráfico continúa cifrado por SSH hasta el servidor local. El proveedor conoce la IP pública de origen de la conexión SSH, pero los remitentes no reciben la IP local del equipo. La primera clave SSH del servidor se acepta y almacena automáticamente; una clave cambiada posteriormente provoca el rechazo del túnel.
 
 ## Arquitectura
 
     Navegador móvil
           | HTTPS
           v
-    Serveo reverse proxy
+    localhost.run reverse proxy
           | SSH autenticado
           v
     127.0.0.1:8765

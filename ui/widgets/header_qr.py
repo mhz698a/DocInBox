@@ -1,4 +1,4 @@
-"""Serveo connection QR widget."""
+"""localhost.run connection QR widget."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 
 class HeaderQrWidget(QFrame):
-    """Show only the public Serveo URL; never display the local host address."""
+    """Show only the public localhost.run URL; never display the local host address."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -26,11 +26,11 @@ class HeaderQrWidget(QFrame):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(8)
 
-        self.mode_label = QLabel("SERVIDOR PRIVADO")
+        self.mode_label = QLabel("ESPERANDO CONEXIÓN")
         self.mode_label.setObjectName("QrMode")
         root.addWidget(self.mode_label)
 
-        self.qr_label = QLabel("Esperando conexión pública de Serveo.")
+        self.qr_label = QLabel("Esperando la dirección pública temporal.")
         self.qr_label.setObjectName("QrImage")
         self.qr_label.setFixedSize(188, 188)
         self.qr_label.setWordWrap(True)
@@ -38,7 +38,7 @@ class HeaderQrWidget(QFrame):
         root.addWidget(self.qr_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.url_label = QLabel(
-            "La dirección pública aparecerá cuando Serveo confirme el túnel."
+            "La dirección HTTPS aparecerá cuando se establezca el túnel."
         )
         self.url_label.setObjectName("QrUrl")
         self.url_label.setWordWrap(True)
@@ -58,9 +58,9 @@ class HeaderQrWidget(QFrame):
         buttons.addWidget(self.open_button)
         root.addLayout(buttons)
 
-    def set_connection(self, url: str | None, mode: str = "Serveo") -> None:
+    def set_connection(self, url: str | None, mode: str = "localhost.run") -> None:
         self._url = (url or "").strip()
-        self.mode_label.setText(mode.upper() if self._url else "SERVIDOR PRIVADO")
+        self.mode_label.setText(mode.upper() if self._url else "ESPERANDO CONEXIÓN")
         self.url_label.setText(
             self._url or "La dirección pública no está disponible."
         )
@@ -68,7 +68,7 @@ class HeaderQrWidget(QFrame):
         self.open_button.setEnabled(bool(self._url))
         if not self._url:
             self.qr_label.setPixmap(QPixmap())
-            self.qr_label.setText("Esperando conexión pública de Serveo.")
+            self.qr_label.setText("Esperando la dirección pública temporal.")
             return
 
         try:

@@ -27,11 +27,10 @@ from config import Config
 from services.file_policy import SUPPORTED_EXTENSIONS, normalized_extensions
 from services.file_watcher import InboxWatcher
 from services.lan_server import LanServerThread
-from services.serveo_tunnel import ServeoTunnelThread, ensure_serveo_identity
+from services.localhostrun_tunnel import LocalhostRunTunnelThread
 from ui.widgets.docs_table_tab import DocsTableTab
 from ui.widgets.file_types_dialog import FileTypesDialog
 from ui.widgets.header_qr import HeaderQrWidget
-from ui.widgets.serveo_setup_dialog import ServeoSetupDialog
 from ui.widgets.stats_table_tab import StatsTableTab
 
 
@@ -45,7 +44,7 @@ def _format_size(size: int) -> str:
 
 
 class MainWindow(QMainWindow):
-    """Desktop control panel for the private receiver and Serveo access."""
+    """Desktop control panel for the private receiver and localhost.run access."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -57,10 +56,9 @@ class MainWindow(QMainWindow):
         self.flask_app = create_app()
         self.document_store = self.flask_app.extensions["document_store"]
         self.server_thread: LanServerThread | None = None
-        self.serveo_thread: ServeoTunnelThread | None = None
-        self.public_hostname = ""
+        self.localhostrun_thread: LocalhostRunTunnelThread | None = None
         self.access_token = ""
-        self._last_serveo_error = ""
+        self._last_localhostrun_error = ""
         self._last_server_error = ""
         self._server_stop_pending = False
 
@@ -211,7 +209,6 @@ class MainWindow(QMainWindow):
 
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
-        self.public_hostname = ""
         self.qr_widget.set_connection(None)
         self.status_label.setText("Iniciando receptor privado…")
         self.server_button.setText("Iniciando…")
@@ -226,11 +223,11 @@ class MainWindow(QMainWindow):
     def _server_ready(self, _bound_port: int) -> None:
         self._last_server_error = ""
         self.status_label.setText(
-            "Receptor privado activo · estableciendo conexión segura con Serveo…"
+            "Receptor privado activo · conectando con localhost.run sin cuenta ni claves de usuario…"
         )
         self.server_button.setText("Detener receptor")
         self.server_button.setEnabled(True)
-        self._start_serveo_tunnel()
+        self._start_localhostrun_tunnel()
 
     def _server_error(self, message: str) -> None:
         self._last_server_error = message
@@ -240,16 +237,15 @@ class MainWindow(QMainWindow):
         self.server_button.setText("Cerrando receptor…")
         self.server_button.setEnabled(False)
         self.qr_widget.set_connection(None)
-        if self.serveo_thread and self.serveo_thread.isRunning():
-            self.serveo_thread.stop()
+        if self.localhostrun_thread and self.localhostrun_thread.isRunning():
+            self.localhostrun_thread.stop()
 
     def _server_stopped(self) -> None:
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
-        self.public_hostname = ""
         self.qr_widget.set_connection(None)
-        if self.serveo_thread and self.serveo_thread.isRunning():
-            self.serveo_thread.stop()
+        if self.localhostrun_thread and self.localhostrun_thread.isRunning():
+            self.localhostrun_thread.stop()
         self._server_stop_pending = True
         self.server_button.setText("Cerrando túnel…")
         self.server_button.setEnabled(False)
@@ -257,7 +253,7 @@ class MainWindow(QMainWindow):
 
     def _finalize_server_stop(self) -> None:
         server_running = bool(self.server_thread and self.server_thread.isRunning())
-        tunnel_running = bool(self.serveo_thread and self.serveo_thread.isRunning())
+        tunnel_running = bool(self.localhostrun_thread and self.localhostrun_thread.isRunning())
         if server_running or tunnel_running:
             QTimer.singleShot(100, self._finalize_server_stop)
             return
@@ -272,94 +268,63 @@ class MainWindow(QMainWindow):
             self.server_button.setEnabled(False)
             self.server_button.setText("Deteniendo…")
             self._server_stop_pending = bool(
-                self.serveo_thread and self.serveo_thread.isRunning()
+                self.localhostrun_thread and self.localhostrun_thread.isRunning()
             )
             if self._server_stop_pending:
-                self.serveo_thread.stop()
+                self.localhostrun_thread.stop()
             self.flask_app.config["ACCESS_TOKEN"] = ""
             self.access_token = ""
             self.server_thread.stop()
         else:
             self.start_server()
 
-    def _start_serveo_tunnel(self) -> None:
+    def _start_localhostrun_tunnel(self) -> None:
+        """Start a keyless localhost.run tunnel after Flask binds to loopback."""
         if not self.server_thread or not self.server_thread.isRunning():
             return
-        if self.serveo_thread and self.serveo_thread.isRunning():
+        if self.localhostrun_thread and self.localhostrun_thread.isRunning():
             return
-
-        try:
-            private_key, public_key, key_created = ensure_serveo_identity(
-                Config.SERVEO_SSH_KEY
-            )
-        except Exception as exc:
-            self.status_label.setText(
-                "El receptor está privado; no se pudo preparar la identidad SSH."
-            )
-            QMessageBox.warning(self, "Identidad Serveo", str(exc))
-            return
-
-        registered = self.settings.value(
-            "serveo/identity_registered",
-            False,
-            type=bool,
-        )
-        if key_created:
-            registered = False
-            self.settings.setValue("serveo/identity_registered", False)
-
-        if not registered:
-            dialog = ServeoSetupDialog(public_key, self)
-            if dialog.exec() != dialog.DialogCode.Accepted:
-                self.status_label.setText(
-                    "Receptor privado activo · registra la clave pública para publicar."
-                )
-                return
-            self.settings.setValue("serveo/identity_registered", True)
-            self.settings.sync()
 
         self.access_token = secrets.token_urlsafe(32)
         self.flask_app.config["ACCESS_TOKEN"] = self.access_token
-        self.public_hostname = f"docinbox-{secrets.token_hex(5)}.serveo.net"
-        self._last_serveo_error = ""
-        self.status_label.setText("Autenticando SSH y solicitando subdominio reservado…")
+        self._last_tunnel_error = ""
+        self.status_label.setText(
+            "Solicitando una dirección HTTPS temporal a localhost.run…"
+        )
 
-        self.serveo_thread = ServeoTunnelThread(
+        self.localhostrun_thread = LocalhostRunTunnelThread(
             local_port=self.server_thread.bound_port or Config.PORT,
-            private_key_path=private_key,
-            known_hosts_path=Config.SERVEO_KNOWN_HOSTS,
-            public_hostname=self.public_hostname,
-            ssh_port=Config.SERVEO_SSH_PORT,
+            known_hosts_path=Config.LOCALHOSTRUN_KNOWN_HOSTS,
+            ssh_port=Config.LOCALHOSTRUN_SSH_PORT,
             parent=self,
         )
-        self.serveo_thread.tunnel_ready.connect(self._serveo_ready)
-        self.serveo_thread.tunnel_error.connect(self._serveo_error)
-        self.serveo_thread.tunnel_stopped.connect(self._serveo_stopped)
-        self.serveo_thread.start()
+        self.localhostrun_thread.tunnel_ready.connect(self._localhostrun_ready)
+        self.localhostrun_thread.tunnel_error.connect(self._localhostrun_error)
+        self.localhostrun_thread.tunnel_stopped.connect(self._localhostrun_stopped)
+        self.localhostrun_thread.start()
 
-    def _serveo_ready(self, base_url: str) -> None:
+    def _localhostrun_ready(self, base_url: str) -> None:
         public_link = f"{base_url.rstrip('/')}/?{urlencode({'key': self.access_token})}"
-        self.qr_widget.set_connection(public_link, "Acceso HTTPS · Serveo")
-        self.status_label.setText("Receptor activo · conexión HTTPS de Serveo establecida.")
+        self.qr_widget.set_connection(public_link, "Acceso HTTPS · localhost.run")
+        self.status_label.setText("Receptor activo · enlace HTTPS de localhost.run disponible.")
         self.statusBar().showMessage(
-            "El QR contiene únicamente la URL pública; la dirección local no se publica.",
+            "El QR contiene únicamente la dirección HTTPS pública temporal.",
             6000,
         )
 
-    def _serveo_error(self, message: str) -> None:
-        self._last_serveo_error = message
+    def _localhostrun_error(self, message: str) -> None:
+        self._last_localhostrun_error = message
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
         self.qr_widget.set_connection(None)
         self.status_label.setText(
-            "El receptor permanece privado. No se publicó ningún enlace anónimo."
+            "El receptor permanece privado porque no se pudo establecer el túnel."
         )
         self.statusBar().showMessage(message, 12000)
 
-    def _serveo_stopped(self) -> None:
+    def _localhostrun_stopped(self) -> None:
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
-        self.public_hostname = ""
         self.qr_widget.set_connection(None)
 
         if self._server_stop_pending:
@@ -367,13 +332,13 @@ class MainWindow(QMainWindow):
             return
 
         if self.server_thread and self.server_thread.isRunning():
-            if self._last_serveo_error:
+            if self._last_localhostrun_error:
                 self.status_label.setText(
-                    "Receptor privado activo · el túnel Serveo no está disponible."
+                    "Receptor privado activo · el túnel localhost.run no está disponible."
                 )
             else:
                 self.status_label.setText(
-                    "Receptor privado activo · conexión Serveo detenida."
+                    "Receptor privado activo · conexión localhost.run detenida."
                 )
 
     def _configure_file_types(self) -> None:
@@ -497,9 +462,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self.inbox_watcher.stop()
-        if self.serveo_thread and self.serveo_thread.isRunning():
-            self.serveo_thread.stop()
-            self.serveo_thread.wait(5000)
+        if self.localhostrun_thread and self.localhostrun_thread.isRunning():
+            self.localhostrun_thread.stop()
+            self.localhostrun_thread.wait(5000)
         if self.server_thread and self.server_thread.isRunning():
             self.server_thread.stop()
             self.server_thread.wait(5000)

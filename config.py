@@ -55,17 +55,10 @@ class Config:
         )
     ).expanduser()
 
-    SERVEO_SSH_DIR = APP_DATA_DIR / "ssh"
-    SERVEO_SSH_KEY = Path(
-        os.environ.get(
-            "DOCINBOX_SERVEO_SSH_KEY",
-            str(SERVEO_SSH_DIR / "docinbox_ed25519"),
-        )
-    ).expanduser()
-    SERVEO_KNOWN_HOSTS = SERVEO_SSH_DIR / "known_hosts"
-    SERVEO_HOST = "serveo.net"
-    SERVEO_SSH_PORT = _positive_int("DOCINBOX_SERVEO_SSH_PORT", 22)
-    # Ed25519 host key fingerprint published in Serveo's Windows SSH guide.
-    SERVEO_HOST_KEY_FINGERPRINT = (
-        "SHA256:GnmVK+70U6GqbupoV+gg7LnHHUsW1IjrK0cLqvDJxIk"
+    LOCALHOSTRUN_SSH_HOST = "localhost.run"
+    LOCALHOSTRUN_SSH_PORT = _positive_int(
+        "DOCINBOX_LOCALHOSTRUN_SSH_PORT",
+        22,
     )
+    # OpenSSH stores the server key on first connection (TOFU) and rejects changes.
+    LOCALHOSTRUN_KNOWN_HOSTS = APP_DATA_DIR / "ssh" / "localhostrun_known_hosts"
