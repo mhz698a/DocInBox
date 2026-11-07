@@ -1,4 +1,4 @@
-"""Flask application that receives files from devices on the local network."""
+"""Private Flask receiver; public access is routed through authenticated Serveo."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 
 from config import Config
 from services.document_store import DocumentStore
+from services.file_policy import is_extension_allowed, normalized_extensions
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -33,6 +34,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config["DATABASE_PATH"] = Path(app.config["DATABASE_PATH"]).expanduser()
     app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
     app.config["DATABASE_PATH"].parent.mkdir(parents=True, exist_ok=True)
+    app.config["ALLOWED_EXTENSIONS"] = normalized_extensions(
+        app.config.get("ALLOWED_EXTENSIONS", Config.ALLOWED_EXTENSIONS)
+    )
 
     store = app.config.get("DOCUMENT_STORE")
     if store is None:
@@ -49,11 +53,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not has_access(request.args.get("key", "")):
             abort(403)
 
+        extensions = sorted(current_app.config["ALLOWED_EXTENSIONS"])
         response = make_response(
             render_template(
                 "index.html",
                 max_upload_mb=app.config["MAX_UPLOAD_MB"],
                 access_key=access_key,
+                accepted_extensions=",".join(f".{ext}" for ext in extensions),
+                accepted_extensions_text=", ".join(f".{ext}" for ext in extensions),
             )
         )
         response.headers["Cache-Control"] = "no-store"
@@ -79,6 +86,18 @@ def create_app(test_config: dict | None = None) -> Flask:
         safe_name = secure_filename(original_name)
         if not safe_name:
             return jsonify({"error": "El nombre del archivo no es válido."}), 400
+
+        allowed_extensions = current_app.config["ALLOWED_EXTENSIONS"]
+        if not is_extension_allowed(safe_name, allowed_extensions):
+            allowed_text = ", ".join(f".{ext}" for ext in sorted(allowed_extensions))
+            return jsonify(
+                {
+                    "error": (
+                        "Tipo de archivo no permitido. "
+                        f"Extensiones habilitadas: {allowed_text or 'ninguna'}."
+                    )
+                }
+            ), 415
 
         upload_id = uuid4().hex
         upload_folder: Path = current_app.config["UPLOAD_FOLDER"]
@@ -139,7 +158,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_file_too_large(_error):
-        limit_mb = app.config["MAX_UPLOAD_MB"]
+        limit_mb = current_app.config["MAX_UPLOAD_MB"]
         return jsonify(
             {"error": f"El archivo supera el límite de {limit_mb} MB."}
         ), 413
@@ -148,12 +167,12 @@ def create_app(test_config: dict | None = None) -> Flask:
 
 
 def main() -> None:
-    """Run the standalone LAN receiver for development and initial testing."""
+    """Run Flask locally for development; this mode is not exposed to the LAN."""
     from werkzeug.serving import run_simple
 
     app = create_app()
     print(
-        f"DocInBox está escuchando en http://{Config.HOST}:{Config.PORT} "
+        f"DocInBox Receiver disponible en http://127.0.0.1:{Config.PORT} "
         f"(límite: {Config.MAX_UPLOAD_MB} MB por archivo)."
     )
     run_simple(

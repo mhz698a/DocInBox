@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from app_flask import create_app
+from services.file_policy import SUPPORTED_EXTENSIONS
 
 
 class ReceiverApplicationTests(unittest.TestCase):
@@ -22,6 +23,7 @@ class ReceiverApplicationTests(unittest.TestCase):
                 "MAX_UPLOAD_BYTES": 1024 * 1024,
                 "MAX_UPLOAD_MB": 1,
                 "ACCESS_TOKEN": "",
+                "ALLOWED_EXTENSIONS": set(SUPPORTED_EXTENSIONS),
             }
         )
         self.client = self.app.test_client()
@@ -41,6 +43,7 @@ class ReceiverApplicationTests(unittest.TestCase):
         stylesheet = self.client.get("/assets/s.css")
         self.assertEqual(page.status_code, 200)
         self.assertIn("Envía tus documentos".encode("utf-8"), page.data)
+        self.assertIn(b'accept=".doc,.docx', page.data)
         self.assertEqual(script.status_code, 200)
         self.assertEqual(stylesheet.status_code, 200)
 
@@ -63,6 +66,25 @@ class ReceiverApplicationTests(unittest.TestCase):
         self.assertEqual(len(documents), 1)
         self.assertEqual(documents[0]["id"], payload["id"])
         self.assertEqual(documents[0]["stored_path"], str(saved_files[0].resolve()))
+
+    def test_extension_check_is_case_insensitive(self) -> None:
+        response = self.client.post(
+            "/api/upload",
+            data={"file": (io.BytesIO(b"pdf"), "REPORT.PDF")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_upload_rejects_disabled_extension(self) -> None:
+        self.app.config["ALLOWED_EXTENSIONS"] = {"pdf"}
+        response = self.client.post(
+            "/api/upload",
+            data={"file": (io.BytesIO(b"payload"), "program.exe")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 415)
+        self.assertIn("no permitido", response.get_json()["error"])
+        self.assertEqual(list(self.upload_dir.iterdir()), [])
 
     def test_same_filename_does_not_overwrite_previous_upload(self) -> None:
         for content in (b"first", b"second"):

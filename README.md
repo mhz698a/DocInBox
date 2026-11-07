@@ -1,125 +1,132 @@
 # DocInBox — Recepción y administración de documentos
 
-DocInBox recibe documentos desde teléfonos y computadoras y permite administrarlos desde una aplicación de escritorio PyQt6. El servidor Flask trabaja en un hilo Qt independiente.
+DocInBox recibe documentos desde teléfonos y computadoras y permite administrarlos desde una aplicación de escritorio PyQt6. Flask escucha exclusivamente en localhost y Serveo proporciona la dirección pública HTTPS.
 
-## Funcionalidad implementada
+## Funcionalidad
 
 ### Receptor web
-- Página web adaptable para seleccionar o arrastrar documentos.
-- Recepción de varios archivos, enviados individualmente.
-- Límite de tamaño configurable, rechazo de archivos vacíos y normalización de nombres.
-- Almacenamiento fuera del directorio del proyecto y nombres internos únicos.
-- Registro de cada recepción en SQLite.
+- Página adaptable para seleccionar o arrastrar varios documentos.
+- Recepción individual de archivos, con registro de cada llegada en SQLite.
+- Tamaño máximo configurable, nombres saneados y nombres internos únicos.
+- Validación de extensiones tanto en el navegador como en el endpoint Flask.
+- Almacenamiento fuera del directorio del proyecto.
 
 ### Administración de llegadas
-- Ventana de escritorio que inicia el servidor Flask automáticamente.
-- Tabla de documentos recibidos con búsqueda y filtro por estado.
-- Contadores de documentos totales, pendientes y atendidos.
-- Abrir archivo, mostrar su ubicación, copiar la ruta, marcar como atendido o pendiente y eliminarlo.
-- Actualización de la bandeja cuando Flask registra una recepción.
+- Ventana de escritorio PyQt6 que inicia el receptor automáticamente.
+- Tabla con búsqueda, filtro por estado y contadores.
+- Abrir documento, mostrar ubicación, copiar ruta, marcar como atendido/pendiente y eliminar.
+- Al abrir la aplicación, si existen documentos de sesiones anteriores se pregunta si se desea limpiar la bandeja. La limpieza elimina los archivos y sus registros; no se puede deshacer. Si se elige No, los documentos se conservan.
+- Si algún archivo no puede eliminarse, su registro permanece para permitir una limpieza posterior.
 
-### Publicación mediante Pinggy
-- Inicio y detención del túnel desde la ventana.
-- El SDK de Pinggy se ejecuta fuera del hilo de interfaz.
-- El QR cambia automáticamente de la URL LAN a la URL pública HTTPS.
-- El enlace público incluye una clave aleatoria temporal. La página y el endpoint de subida la validan; al detener el túnel, la clave se invalida.
-- El servidor local sigue atendiendo en la red LAN.
+### Tipos de archivo permitidos
+El botón Permitir tipo de archivos abre una lista de casillas configurables. Los valores se guardan en QSettings y se aplican inmediatamente en el servidor.
 
-El enlace/QR público funciona como una invitación: cualquiera que obtenga una copia puede enviar documentos mientras el túnel siga activo. Detén el túnel cuando termines de recibir archivos. El plan gratuito de Pinggy puede tener duración limitada y generar una URL diferente al volver a iniciar el túnel; consulta sus condiciones vigentes.
+Extensiones disponibles: doc, docx, xlsx, xls, ppt, pptx, pdf, png, jpg, jpeg, gif, txt, mp3, wav, flac, m4a, mp4, mkv y avi.
+
+### Serveo SSH
+- Se inicia automáticamente al arrancar el receptor.
+- Flask escucha únicamente en 127.0.0.1; no se enlaza a la interfaz de red local.
+- OpenSSH ejecuta el túnel dentro de un QThread y sin abrir una ventana de consola.
+- El QR muestra exclusivamente una URL HTTPS pública de Serveo.
+- La integración solicita un subdominio reservado aleatorio y exige una identidad SSH registrada. No utiliza túneles anónimos, porque Serveo indica que los túneles anónimos pueden revelar la IP de origen en el subdominio y en cabeceras HTTP.
+- Se verifica la huella Ed25519 del servidor Serveo antes de permitir la conexión. Si la huella no coincide, no se abre el túnel.
+- La página y POST /api/upload están protegidos por una clave temporal. Si la autenticación SSH o el túnel fallan, no se muestra una URL local ni se hace fallback a un túnel anónimo.
+
+La clave pública SSH se genera una sola vez en el directorio de datos de DocInBox. En el primer inicio, la ventana muestra la clave y abre la consola de Serveo para que se registre. La clave privada permanece en el equipo. Si se elimina o sustituye, será necesario registrar la nueva clave.
+
+Documentación de Serveo:
+- https://serveo.net/docs/
+- https://serveo.net/terms/
 
 ## Requisitos
 
 - Python 3.12 o compatible.
-- Flask.
-- PyQt6.
-- PyMuPDF.
-- Pinggy Python SDK.
+- Flask, PyQt6 y PyMuPDF.
 - qrcode con Pillow.
+- OpenSSH Client (ssh, ssh-keygen y ssh-keyscan).
 
-Instalación:
+En Windows, OpenSSH Client puede instalarse desde Características opcionales. Verifica su disponibilidad con:
+
+    ssh -V
+    ssh-keygen -?
+    ssh-keyscan -?
+
+Instala las dependencias Python:
 
     python -m pip install -r requirements.txt
 
 ## Iniciar DocInBox
 
-La aplicación de escritorio inicia el receptor automáticamente:
-
     python app.py
 
-Para iniciar solamente Flask, sin abrir PyQt6:
+La aplicación inicia Flask en localhost y crea automáticamente el túnel SSH. En el primer inicio, registra la clave pública que aparece en el diálogo de configuración de Serveo. Cuando el túnel se confirme, aparecerá el QR público.
+
+Para iniciar únicamente Flask en modo de desarrollo local:
 
     python app.py --web-only
 
-Por defecto, el receptor escucha en todas las interfaces de red, en el puerto 8765. En la ventana se muestra la URL local y su QR. En otro dispositivo conectado a la misma red, escanea el QR o abre la dirección IPv4 del equipo receptor.
+Este modo no genera túnel y no permite recibir archivos desde otros dispositivos.
 
-## Publicar con Pinggy
-
-1. Inicia DocInBox y espera a que el estado indique que el receptor está activo.
-2. Pulsa Publicar con Pinggy.
-3. La aplicación crea el túnel y espera la URL pública HTTPS.
-4. Cuando se conecte, el QR mostrará el enlace público protegido con una clave temporal.
-5. Comparte el QR o enlace con los dispositivos que deban enviar archivos.
-6. Pulsa Detener túnel cuando termines. La clave anterior dejará de ser válida y el QR volverá a la dirección LAN.
-
-La integración utiliza el SDK oficial de Python; no requiere iniciar manualmente otra ventana de terminal. El paquete pinggy se instala con requirements.txt.
-
-## Datos locales
-
-En Windows, la configuración predeterminada utiliza:
+## Datos locales en Windows
 
 - Documentos: %LOCALAPPDATA%/DocInBox/Received
 - Base de datos: %LOCALAPPDATA%/DocInBox/inbox.sqlite3
-
-En otros sistemas, los datos se guardan en ~/.local/share/DocInBox.
+- Identidad SSH: %LOCALAPPDATA%/DocInBox/ssh/docinbox_ed25519
+- Clave pública: %LOCALAPPDATA%/DocInBox/ssh/docinbox_ed25519.pub
+- Huella conocida del servidor: %LOCALAPPDATA%/DocInBox/ssh/known_hosts
 
 ## Variables de entorno
 
 | Variable | Valor predeterminado | Descripción |
 |---|---:|---|
-| DOCINBOX_HOST | 0.0.0.0 | Interfaz de red donde escucha Flask. |
+| DOCINBOX_HOST | 127.0.0.1 | Interfaz privada donde escucha Flask. |
 | DOCINBOX_PORT | 8765 | Puerto TCP local. |
-| DOCINBOX_MAX_UPLOAD_MB | 100 | Tamaño máximo de cada archivo. |
-| DOCINBOX_DATA_DIR | Directorio de datos del usuario | Directorio base de datos local. |
-| DOCINBOX_STORAGE_DIR | DATA_DIR/Received | Carpeta de documentos recibidos. |
-| DOCINBOX_DATABASE_PATH | DATA_DIR/inbox.sqlite3 | Base SQLite de la bandeja. |
+| DOCINBOX_MAX_UPLOAD_MB | 100 | Tamaño máximo por archivo. |
+| DOCINBOX_DATA_DIR | Directorio de datos del usuario | Directorio base local. |
+| DOCINBOX_STORAGE_DIR | DATA_DIR/Received | Carpeta de archivos recibidos. |
+| DOCINBOX_DATABASE_PATH | DATA_DIR/inbox.sqlite3 | Base de datos SQLite. |
+| DOCINBOX_SERVEO_SSH_KEY | DATA_DIR/ssh/docinbox_ed25519 | Ruta alternativa a una clave SSH registrada. |
+| DOCINBOX_SERVEO_SSH_PORT | 22 | Puerto SSH de Serveo. |
 
 ## API inicial
 
 ### Estado
+
 GET /api/health
 
     {"status": "ok", "service": "DocInBox Receiver"}
 
 ### Recepción
-POST /api/upload con multipart/form-data, campo file.
 
-Cuando se usa Pinggy, se requiere el encabezado X-DocInBox-Key, entregado solamente a la página abierta con la clave temporal.
+POST /api/upload con multipart/form-data y un campo llamado file. Cuando el túnel está activo, requiere X-DocInBox-Key.
+
+Las extensiones no habilitadas reciben HTTP 415. Los archivos mayores al límite reciben HTTP 413.
 
 ## Pruebas
 
     python -m unittest discover -s tests -v
 
-## Consideraciones de seguridad
+## Seguridad
 
-El servicio LAN no tiene autenticación cuando el túnel está apagado y debe usarse dentro de una red privada de confianza. Al iniciar Pinggy se activa una clave aleatoria que protege la página y la recepción pública; no se debe compartir el enlace más allá de los destinatarios previstos. El túnel HTTPS termina TLS en la infraestructura de Pinggy y reenvía la petición al servidor local. No expongas el servicio directamente a Internet ni mantengas el túnel abierto sin necesidad.
+El servidor Flask no escucha en la IP LAN: solo en loopback. La dirección pública es proporcionada por Serveo y el acceso al formulario requiere una clave temporal. El túnel es HTTPS en el extremo público y SSH entre el equipo receptor y Serveo; el tráfico termina en el proxy público antes de reenviarse al servidor local.
+
+La identidad SSH debe estar registrada en Serveo. No se debe desactivar la verificación de la huella del host ni recurrir a un túnel anónimo para solventar errores de autenticación. Si la conexión falla, el receptor permanece privado.
 
 ## Arquitectura
 
-    Navegador cliente
-         | HTTP / HTTPS
-         v
-    Flask Receiver
-         |
-         +--> DocumentStore (SQLite)
-         |         |
-         |         v
-         |      Bandeja PyQt6
-         |
-         +--> Carpeta Received
-         |
-    Pinggy SDK (opcional)
-         |
-         v
-    URL pública HTTPS + QR
-
-La vista previa nativa de PDF, la impresión, los perfiles de remitente y la política de retención se implementarán en etapas posteriores.
+    Navegador móvil
+          | HTTPS
+          v
+    Serveo reverse proxy
+          | SSH autenticado
+          v
+    127.0.0.1:8765
+          |
+          +--> Flask Receiver
+          |
+          +--> DocumentStore (SQLite)
+          |
+          +--> Received/
+          |
+          v
+    Bandeja de administración PyQt6

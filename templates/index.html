@@ -13,26 +13,27 @@
   <main class="page-shell">
     <section class="upload-card" aria-labelledby="page-title">
       <div class="brand-mark" aria-hidden="true">D</div>
-      <p class="eyebrow">RECEPCIÓN LOCAL DE DOCUMENTOS</p>
+      <p class="eyebrow">RECEPCIÓN DE DOCUMENTOS</p>
       <h1 id="page-title">Envía tus documentos</h1>
-      <p class="intro">Selecciona los archivos que deseas enviar al equipo que está en esta red.</p>
+      <p class="intro">Selecciona los archivos que deseas enviar al equipo receptor.</p>
       <form id="upload-form">
         <label class="drop-zone" for="file-input" id="drop-zone">
           <span class="upload-icon" aria-hidden="true">↑</span>
           <strong>Seleccionar archivos</strong>
           <span class="drop-hint">También puedes arrastrarlos aquí</span>
           <span class="file-limit">Hasta {{ max_upload_mb }} MB por archivo</span>
-          <input id="file-input" name="file" type="file" multiple>
+          <input id="file-input" name="file" type="file" accept="{{ accepted_extensions }}" multiple>
         </label>
+        <p class="accepted-types">Tipos permitidos: {{ accepted_extensions_text or "ninguno" }}</p>
         <div id="selected-files" class="selected-files" aria-live="polite"></div>
         <button id="upload-button" class="primary-button" type="submit" disabled>
           Enviar documentos
         </button>
       </form>
       <section id="upload-results" class="upload-results" aria-live="polite" aria-label="Estado de envío"></section>
-      <p class="privacy-note">Los archivos se transfieren directamente al equipo receptor dentro de la red local.</p>
+      <p class="privacy-note">La transferencia se realiza mediante una conexión segura al receptor.</p>
     </section>
-    <footer>DocInBox · Transferencia dentro de la red local</footer>
+    <footer>DocInBox · Recepción de documentos</footer>
   </main>
 </body>
 </html>

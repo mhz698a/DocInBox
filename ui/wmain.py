@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlencode
 
-from PyQt6.QtCore import QTimer, QUrl
+from PyQt6.QtCore import QSettings, QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
@@ -24,16 +24,28 @@ from PyQt6.QtWidgets import (
 
 from app_flask import create_app
 from config import Config
+from services.file_policy import SUPPORTED_EXTENSIONS, normalized_extensions
 from services.file_watcher import InboxWatcher
 from services.lan_server import LanServerThread
-from services.pinggy_tunnel import PinggyTunnelThread
+from services.serveo_tunnel import ServeoTunnelThread, ensure_serveo_identity
 from ui.widgets.docs_table_tab import DocsTableTab
+from ui.widgets.file_types_dialog import FileTypesDialog
 from ui.widgets.header_qr import HeaderQrWidget
+from ui.widgets.serveo_setup_dialog import ServeoSetupDialog
 from ui.widgets.stats_table_tab import StatsTableTab
 
 
+def _format_size(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TB"
+
+
 class MainWindow(QMainWindow):
-    """Desktop control panel for the DocInBox receiver and its arrivals."""
+    """Desktop control panel for the private receiver and Serveo access."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -41,14 +53,19 @@ class MainWindow(QMainWindow):
         self.resize(1180, 760)
         self.setMinimumSize(900, 620)
 
+        self.settings = QSettings("DocInBox", "DocInBox")
         self.flask_app = create_app()
         self.document_store = self.flask_app.extensions["document_store"]
         self.server_thread: LanServerThread | None = None
-        self.tunnel_thread: PinggyTunnelThread | None = None
-        self.local_url = ""
-        self.public_url = ""
+        self.serveo_thread: ServeoTunnelThread | None = None
+        self.public_hostname = ""
         self.access_token = ""
+        self._last_serveo_error = ""
 
+        self.allowed_extensions = self._load_allowed_extensions()
+        self.flask_app.config["ALLOWED_EXTENSIONS"] = set(self.allowed_extensions)
+
+        self._prompt_startup_cleanup()
         self._build_ui()
         self._load_stylesheet()
 
@@ -60,6 +77,52 @@ class MainWindow(QMainWindow):
         self.inbox_watcher.documents_changed.connect(self._documents_changed)
         self.inbox_watcher.start()
         QTimer.singleShot(100, self.start_server)
+
+    def _load_allowed_extensions(self) -> set[str]:
+        stored = self.settings.value("uploads/allowed_extensions", None)
+        if stored is None:
+            return set(SUPPORTED_EXTENSIONS)
+        if isinstance(stored, str):
+            stored = [stored]
+        allowed = normalized_extensions(stored)
+        return set(allowed.intersection(SUPPORTED_EXTENSIONS))
+
+    def _prompt_startup_cleanup(self) -> None:
+        documents = self.document_store.list_documents()
+        if not documents:
+            return
+
+        total_size = sum(int(document["size"]) for document in documents)
+        answer = QMessageBox.warning(
+            self,
+            "Documentos de sesiones anteriores",
+            (
+                f"Hay {len(documents)} documento(s) almacenado(s) "
+                f"({ _format_size(total_size) }).\n\n"
+                "¿Deseas limpiar ahora todos los documentos recibidos?\n\n"
+                "Se eliminarán permanentemente los archivos y sus registros. "
+                "Esta acción no se puede deshacer."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        deleted_count, failed_files = self.document_store.clear_all_documents()
+        if failed_files:
+            details = "\n".join(failed_files[:8])
+            if len(failed_files) > 8:
+                details += f"\n… y {len(failed_files) - 8} archivo(s) más."
+            QMessageBox.warning(
+                self,
+                "Limpieza incompleta",
+                (
+                    f"Se eliminaron {deleted_count} documento(s). "
+                    f"No se pudieron eliminar {len(failed_files)} archivo(s):\n\n"
+                    f"{details}"
+                ),
+            )
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -78,19 +141,19 @@ class MainWindow(QMainWindow):
         header.addLayout(title_box)
         header.addStretch(1)
 
-        self.server_button = QPushButton("Detener receptor")
+        self.server_button = QPushButton("Iniciar receptor")
         self.server_button.setObjectName("PrimaryButton")
         self.server_button.clicked.connect(self._toggle_server)
-        self.server_button.setEnabled(False)
         header.addWidget(self.server_button)
 
-        self.tunnel_button = QPushButton("Publicar con Pinggy")
-        self.tunnel_button.clicked.connect(self._toggle_tunnel)
-        self.tunnel_button.setEnabled(False)
-        header.addWidget(self.tunnel_button)
+        self.file_types_button = QPushButton("Permitir tipo de archivos")
+        self.file_types_button.clicked.connect(self._configure_file_types)
+        header.addWidget(self.file_types_button)
         root.addLayout(header)
 
-        self.status_label = QLabel("Iniciando servidor local…")
+        self.status_label = QLabel(
+            "El servidor permanecerá privado hasta confirmar el túnel seguro."
+        )
         self.status_label.setObjectName("StatusLine")
         root.addWidget(self.status_label)
 
@@ -129,6 +192,7 @@ class MainWindow(QMainWindow):
             button.setEnabled(False)
             actions.addWidget(button)
         root.addLayout(actions)
+
         self.setCentralWidget(central)
         self.statusBar().showMessage("Bandeja preparada.")
 
@@ -142,121 +206,170 @@ class MainWindow(QMainWindow):
     def start_server(self) -> None:
         if self.server_thread and self.server_thread.isRunning():
             return
-        self.status_label.setText("Iniciando receptor Flask…")
+
+        self.flask_app.config["ACCESS_TOKEN"] = ""
+        self.access_token = ""
+        self.public_hostname = ""
+        self.qr_widget.set_connection(None)
+        self.status_label.setText("Iniciando receptor privado…")
+        self.server_button.setText("Iniciando…")
         self.server_button.setEnabled(False)
-        self.tunnel_button.setEnabled(False)
+
         self.server_thread = LanServerThread(app=self.flask_app, parent=self)
         self.server_thread.server_ready.connect(self._server_ready)
         self.server_thread.server_error.connect(self._server_error)
         self.server_thread.server_stopped.connect(self._server_stopped)
         self.server_thread.start()
 
-    def _server_ready(self, url: str) -> None:
-        self.local_url = url.rstrip("/")
-        self.qr_widget.set_connection(self.local_url, "Acceso en red local")
-        self.status_label.setText(f"Receptor activo · {self.local_url}")
+    def _server_ready(self, _bound_port: int) -> None:
+        self.status_label.setText(
+            "Receptor privado activo · estableciendo conexión segura con Serveo…"
+        )
         self.server_button.setText("Detener receptor")
         self.server_button.setEnabled(True)
-        self.tunnel_button.setText("Publicar con Pinggy")
-        self.tunnel_button.setEnabled(True)
+        self._start_serveo_tunnel()
 
     def _server_error(self, message: str) -> None:
         self.status_label.setText(message)
         self.server_button.setText("Iniciar receptor")
         self.server_button.setEnabled(True)
-        self.tunnel_button.setEnabled(False)
         self.qr_widget.set_connection(None)
 
     def _server_stopped(self) -> None:
-        self.local_url = ""
-        if self.tunnel_thread and self.tunnel_thread.isRunning():
-            self.stop_tunnel()
+        self.flask_app.config["ACCESS_TOKEN"] = ""
+        self.access_token = ""
+        self.public_hostname = ""
+        self.qr_widget.set_connection(None)
         self.server_button.setText("Iniciar receptor")
         self.server_button.setEnabled(True)
-        self.tunnel_button.setEnabled(False)
-        self.qr_widget.set_connection(None)
-        if not self.status_label.text().startswith("No se pudo"):
-            self.status_label.setText("Receptor detenido.")
+        self.status_label.setText("Receptor detenido.")
 
     def _toggle_server(self) -> None:
         if self.server_thread and self.server_thread.isRunning():
             self.server_button.setEnabled(False)
+            self.server_button.setText("Deteniendo…")
+            if self.serveo_thread and self.serveo_thread.isRunning():
+                self.serveo_thread.stop()
+            self.flask_app.config["ACCESS_TOKEN"] = ""
+            self.access_token = ""
             self.server_thread.stop()
-            if self.tunnel_thread and self.tunnel_thread.isRunning():
-                self.stop_tunnel()
         else:
             self.start_server()
 
-    def _toggle_tunnel(self) -> None:
-        if self.tunnel_thread and self.tunnel_thread.isRunning():
-            self.stop_tunnel()
-        else:
-            self.start_tunnel()
-
-    def start_tunnel(self) -> None:
+    def _start_serveo_tunnel(self) -> None:
         if not self.server_thread or not self.server_thread.isRunning():
-            self.statusBar().showMessage(
-                "Primero debe estar activo el receptor local.", 5000
+            return
+        if self.serveo_thread and self.serveo_thread.isRunning():
+            return
+
+        try:
+            private_key, public_key, key_created = ensure_serveo_identity(
+                Config.SERVEO_SSH_KEY
             )
+        except Exception as exc:
+            self.status_label.setText(
+                "El receptor está privado; no se pudo preparar la identidad SSH."
+            )
+            QMessageBox.warning(self, "Identidad Serveo", str(exc))
             return
-        if self.tunnel_thread and self.tunnel_thread.isRunning():
-            return
+
+        registered = self.settings.value(
+            "serveo/identity_registered",
+            False,
+            type=bool,
+        )
+        if key_created:
+            registered = False
+            self.settings.setValue("serveo/identity_registered", False)
+
+        if not registered:
+            dialog = ServeoSetupDialog(public_key, self)
+            if dialog.exec() != dialog.DialogCode.Accepted:
+                self.status_label.setText(
+                    "Receptor privado activo · registra la clave pública para publicar."
+                )
+                return
+            self.settings.setValue("serveo/identity_registered", True)
+            self.settings.sync()
 
         self.access_token = secrets.token_urlsafe(32)
         self.flask_app.config["ACCESS_TOKEN"] = self.access_token
-        if self.local_url:
-            local_link = f"{self.local_url}/?{urlencode({'key': self.access_token})}"
-            self.qr_widget.set_connection(local_link, "Acceso local protegido")
-        self.tunnel_button.setText("Cancelar conexión")
-        self.tunnel_button.setEnabled(True)
-        self.status_label.setText("Conectando con Pinggy…")
-        self.tunnel_thread = PinggyTunnelThread(
-            self.server_thread.bound_port or Config.PORT,
+        self.public_hostname = f"docinbox-{secrets.token_hex(5)}.serveo.net"
+        self._last_serveo_error = ""
+        self.status_label.setText("Autenticando SSH y solicitando subdominio reservado…")
+
+        self.serveo_thread = ServeoTunnelThread(
+            local_port=self.server_thread.bound_port or Config.PORT,
+            private_key_path=private_key,
+            known_hosts_path=Config.SERVEO_KNOWN_HOSTS,
+            public_hostname=self.public_hostname,
+            ssh_port=Config.SERVEO_SSH_PORT,
             parent=self,
         )
-        self.tunnel_thread.tunnel_ready.connect(self._tunnel_ready)
-        self.tunnel_thread.tunnel_error.connect(self._tunnel_error)
-        self.tunnel_thread.tunnel_stopped.connect(self._tunnel_stopped)
-        self.tunnel_thread.start()
+        self.serveo_thread.tunnel_ready.connect(self._serveo_ready)
+        self.serveo_thread.tunnel_error.connect(self._serveo_error)
+        self.serveo_thread.tunnel_stopped.connect(self._serveo_stopped)
+        self.serveo_thread.start()
 
-    def _tunnel_ready(self, base_url: str) -> None:
-        self.public_url = base_url.rstrip("/")
-        public_link = f"{self.public_url}/?{urlencode({'key': self.access_token})}"
-        self.qr_widget.set_connection(public_link, "Acceso público · Pinggy")
-        self.status_label.setText("Túnel Pinggy activo · enlace temporal protegido.")
-        self.tunnel_button.setText("Detener túnel")
-        self.tunnel_button.setEnabled(True)
+    def _serveo_ready(self, base_url: str) -> None:
+        public_link = f"{base_url.rstrip('/')}/?{urlencode({'key': self.access_token})}"
+        self.qr_widget.set_connection(public_link, "Acceso HTTPS · Serveo")
+        self.status_label.setText("Receptor activo · conexión HTTPS de Serveo establecida.")
         self.statusBar().showMessage(
-            "El QR ahora apunta al enlace público de Pinggy.", 6000
+            "El QR contiene únicamente la URL pública; la dirección local no se publica.",
+            6000,
         )
 
-    def _tunnel_error(self, message: str) -> None:
-        self.status_label.setText(message)
-        self.statusBar().showMessage(message, 10000)
-
-    def stop_tunnel(self) -> None:
-        if self.tunnel_thread and self.tunnel_thread.isRunning():
-            self.tunnel_button.setEnabled(False)
-            self.status_label.setText("Deteniendo túnel Pinggy…")
-            self.tunnel_thread.stop()
-        else:
-            self._clear_tunnel_state()
-
-    def _tunnel_stopped(self) -> None:
-        self._clear_tunnel_state()
-
-    def _clear_tunnel_state(self) -> None:
+    def _serveo_error(self, message: str) -> None:
+        self._last_serveo_error = message
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
-        self.public_url = ""
-        if self.local_url:
-            self.qr_widget.set_connection(self.local_url, "Acceso en red local")
-            self.status_label.setText(f"Receptor activo · {self.local_url}")
-            self.tunnel_button.setText("Publicar con Pinggy")
-            self.tunnel_button.setEnabled(True)
+        self.qr_widget.set_connection(None)
+        self.status_label.setText(
+            "El receptor permanece privado. No se publicó ningún enlace anónimo."
+        )
+        self.statusBar().showMessage(message, 12000)
+
+    def _serveo_stopped(self) -> None:
+        self.flask_app.config["ACCESS_TOKEN"] = ""
+        self.access_token = ""
+        self.public_hostname = ""
+        self.qr_widget.set_connection(None)
+        if self.server_thread and self.server_thread.isRunning():
+            if self._last_serveo_error:
+                self.status_label.setText(
+                    "Receptor privado activo · el túnel Serveo no está disponible."
+                )
+            else:
+                self.status_label.setText(
+                    "Receptor privado activo · conexión Serveo detenida."
+                )
+
+    def _configure_file_types(self) -> None:
+        dialog = FileTypesDialog(self.allowed_extensions, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        self.allowed_extensions = dialog.selected_extensions()
+        self.flask_app.config["ALLOWED_EXTENSIONS"] = set(self.allowed_extensions)
+        ordered = [
+            extension
+            for extension in SUPPORTED_EXTENSIONS
+            if extension in self.allowed_extensions
+        ]
+        self.settings.setValue("uploads/allowed_extensions", ordered)
+        self.settings.sync()
+
+        if ordered:
+            detail = ", ".join(f".{extension}" for extension in ordered)
+            self.statusBar().showMessage(
+                f"Tipos permitidos actualizados: {detail}", 7000
+            )
         else:
-            self.qr_widget.set_connection(None)
-            self.tunnel_button.setEnabled(False)
+            self.statusBar().showMessage(
+                "No hay extensiones habilitadas; el receptor rechazará todos los archivos.",
+                7000,
+            )
 
     def _documents_changed(self, documents: list[dict]) -> None:
         self.docs_widget.set_documents(documents)
@@ -321,7 +434,7 @@ class MainWindow(QMainWindow):
             return
         new_status = (
             self.document_store.PENDING
-            if document["status"] == self.document_store.HANDLED
+            if document["status"] == "handled"
             else self.document_store.HANDLED
         )
         self.document_store.set_status(document["id"], new_status)
@@ -353,9 +466,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self.inbox_watcher.stop()
-        if self.tunnel_thread and self.tunnel_thread.isRunning():
-            self.tunnel_thread.stop()
-            self.tunnel_thread.wait(5000)
+        if self.serveo_thread and self.serveo_thread.isRunning():
+            self.serveo_thread.stop()
+            self.serveo_thread.wait(5000)
         if self.server_thread and self.server_thread.isRunning():
             self.server_thread.stop()
             self.server_thread.wait(5000)

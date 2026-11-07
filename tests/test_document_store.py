@@ -42,6 +42,32 @@ class DocumentStoreTests(unittest.TestCase):
         self.assertFalse(self.document_path.exists())
         self.assertIsNone(self.store.get_document("doc-1"))
 
+    def test_clear_all_permanently_removes_files_and_records(self) -> None:
+        second_path = self.root / "second.pdf"
+        second_path.write_bytes(b"second")
+        self.store.add_document(
+            document_id="doc-2",
+            filename="second.pdf",
+            stored_path=second_path,
+            size=6,
+            received_at="2026-11-06T12:01:00+00:00",
+        )
+
+        deleted_count, failures = self.store.clear_all_documents()
+
+        self.assertEqual(deleted_count, 2)
+        self.assertEqual(failures, [])
+        self.assertFalse(self.document_path.exists())
+        self.assertFalse(second_path.exists())
+        self.assertEqual(self.store.list_documents(), [])
+
+    def test_clear_all_is_safe_when_files_are_already_missing(self) -> None:
+        self.document_path.unlink()
+        deleted_count, failures = self.store.clear_all_documents()
+        self.assertEqual(deleted_count, 1)
+        self.assertEqual(failures, [])
+        self.assertEqual(self.store.list_documents(), [])
+
     def test_invalid_status_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.store.set_status("doc-1", "unknown")

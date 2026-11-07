@@ -1,4 +1,4 @@
-"""Connection QR widget for LAN and Pinggy addresses."""
+"""Serveo connection QR widget."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 
 class HeaderQrWidget(QFrame):
-    """Show the active receiver address and a QR code for it."""
+    """Show only the public Serveo URL; never display the local host address."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -26,23 +26,24 @@ class HeaderQrWidget(QFrame):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(8)
 
-        self.mode_label = QLabel("SIN SERVIDOR")
+        self.mode_label = QLabel("SERVIDOR PRIVADO")
         self.mode_label.setObjectName("QrMode")
-        self.mode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.mode_label)
 
-        self.qr_label = QLabel("Inicia el receptor para generar el QR.")
+        self.qr_label = QLabel("Esperando conexión pública de Serveo.")
         self.qr_label.setObjectName("QrImage")
         self.qr_label.setFixedSize(188, 188)
-        self.qr_label.setWordWrap(True)
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.qr_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.url_label = QLabel("El enlace aparecerá aquí.")
+        self.url_label = QLabel(
+            "La dirección pública aparecerá cuando Serveo confirme el túnel."
+        )
         self.url_label.setObjectName("QrUrl")
-        self.url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.url_label.setWordWrap(True)
-        self.url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.url_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         root.addWidget(self.url_label)
 
         buttons = QHBoxLayout()
@@ -56,15 +57,17 @@ class HeaderQrWidget(QFrame):
         buttons.addWidget(self.open_button)
         root.addLayout(buttons)
 
-    def set_connection(self, url: str | None, mode: str = "LAN") -> None:
+    def set_connection(self, url: str | None, mode: str = "Serveo") -> None:
         self._url = (url or "").strip()
-        self.mode_label.setText(mode.upper() if self._url else "SIN SERVIDOR")
-        self.url_label.setText(self._url or "El enlace aparecerá aquí.")
+        self.mode_label.setText(mode.upper() if self._url else "SERVIDOR PRIVADO")
+        self.url_label.setText(
+            self._url or "La dirección pública no está disponible."
+        )
         self.copy_button.setEnabled(bool(self._url))
         self.open_button.setEnabled(bool(self._url))
         if not self._url:
             self.qr_label.setPixmap(QPixmap())
-            self.qr_label.setText("Inicia el receptor para generar el QR.")
+            self.qr_label.setText("Esperando conexión pública de Serveo.")
             return
 
         try:

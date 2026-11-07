@@ -145,3 +145,37 @@ class DocumentStore:
             raise
         finally:
             connection.close()
+
+    def clear_all_documents(self) -> tuple[int, list[str]]:
+        """Permanently remove all stored documents and their inbox records.
+
+        Files that cannot be deleted remain registered in SQLite so that the
+        operator can identify and retry them. Missing files count as cleaned.
+        """
+        connection = self._connect()
+        deleted_ids: list[str] = []
+        failed_files: list[str] = []
+        try:
+            rows = connection.execute(
+                "SELECT id, filename, stored_path FROM documents"
+            ).fetchall()
+
+            for row in rows:
+                try:
+                    Path(row["stored_path"]).unlink(missing_ok=True)
+                    deleted_ids.append(row["id"])
+                except OSError as exc:
+                    failed_files.append(f"{row['filename']}: {exc}")
+
+            if deleted_ids:
+                connection.executemany(
+                    "DELETE FROM documents WHERE id = ?",
+                    ((document_id,) for document_id in deleted_ids),
+                )
+                connection.commit()
+            return len(deleted_ids), failed_files
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
