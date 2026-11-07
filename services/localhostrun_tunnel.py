@@ -14,7 +14,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 # Captura las URLs asignadas por el servicio de Tunnelmole.
 _DOMAIN_PATTERN = re.compile(
-    r"https://[a-zA-Z0-9.-]+\.(?:tunnelmole\.net|tunnelmole\.com)",
+    r"https://[a-zA-Z0-9.-]+\.(?:tunnelmole\.net|tunnelmole\.com)(?![a-zA-Z0-9.-])",
     re.IGNORECASE,
 )
 
@@ -36,6 +36,14 @@ def resolve_tmole_binary(application_root: str | Path | None = None) -> Path:
             f"No se encontró el binario de Tunnelmole: {executable}"
         )
     return executable
+
+
+def build_tmole_command(
+    local_port: int,
+    application_root: str | Path | None = None,
+) -> list[str]:
+    """Build the command using the bundled binary and the local receiver port."""
+    return [str(resolve_tmole_binary(application_root)), str(int(local_port))]
 
 
 def extract_public_url(output: str) -> str | None:
@@ -71,9 +79,7 @@ class LocalhostRunTunnelThread(QThread):
 
         try:
             # Utiliza el ejecutable incluido en DocInBox, no una instalación global.
-            tmole_path = resolve_tmole_binary()
-            command = [str(tmole_path), str(self.local_port)]
-
+            command = build_tmole_command(self.local_port)
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.DEVNULL,
