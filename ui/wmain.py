@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
         self.public_hostname = ""
         self.access_token = ""
         self._last_serveo_error = ""
+        self._last_server_error = ""
         self._server_stop_pending = False
 
         self.allowed_extensions = self._load_allowed_extensions()
@@ -223,6 +224,7 @@ class MainWindow(QMainWindow):
         self.server_thread.start()
 
     def _server_ready(self, _bound_port: int) -> None:
+        self._last_server_error = ""
         self.status_label.setText(
             "Receptor privado activo · estableciendo conexión segura con Serveo…"
         )
@@ -231,6 +233,7 @@ class MainWindow(QMainWindow):
         self._start_serveo_tunnel()
 
     def _server_error(self, message: str) -> None:
+        self._last_server_error = message
         self.status_label.setText(message)
         self.server_button.setText("Iniciar receptor")
         self.server_button.setEnabled(True)
@@ -241,18 +244,22 @@ class MainWindow(QMainWindow):
         self.access_token = ""
         self.public_hostname = ""
         self.qr_widget.set_connection(None)
+        self._server_stop_pending = True
+        self.server_button.setText("Cerrando túnel…")
+        self.server_button.setEnabled(False)
+        QTimer.singleShot(150, self._finalize_server_stop)
 
-        if self.serveo_thread and self.serveo_thread.isRunning():
-            self._server_stop_pending = True
-            self.server_button.setText("Cerrando túnel…")
-            self.server_button.setEnabled(False)
-            self.status_label.setText("Cerrando conexión privada…")
+    def _finalize_server_stop(self) -> None:
+        server_running = bool(self.server_thread and self.server_thread.isRunning())
+        tunnel_running = bool(self.serveo_thread and self.serveo_thread.isRunning())
+        if server_running or tunnel_running:
+            QTimer.singleShot(100, self._finalize_server_stop)
             return
 
         self._server_stop_pending = False
         self.server_button.setText("Iniciar receptor")
         self.server_button.setEnabled(True)
-        self.status_label.setText("Receptor detenido.")
+        self.status_label.setText(self._last_server_error or "Receptor detenido.")
 
     def _toggle_server(self) -> None:
         if self.server_thread and self.server_thread.isRunning():
@@ -349,13 +356,8 @@ class MainWindow(QMainWindow):
         self.public_hostname = ""
         self.qr_widget.set_connection(None)
 
-        if self._server_stop_pending and (
-            not self.server_thread or not self.server_thread.isRunning()
-        ):
-            self._server_stop_pending = False
-            self.server_button.setText("Iniciar receptor")
-            self.server_button.setEnabled(True)
-            self.status_label.setText("Receptor detenido.")
+        if self._server_stop_pending:
+            QTimer.singleShot(150, self._finalize_server_stop)
             return
 
         if self.server_thread and self.server_thread.isRunning():
