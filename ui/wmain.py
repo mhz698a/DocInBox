@@ -204,6 +204,9 @@ class MainWindow(QMainWindow):
 
         self.access_token = secrets.token_urlsafe(32)
         self.flask_app.config["ACCESS_TOKEN"] = self.access_token
+        if self.local_url:
+            local_link = f"{self.local_url}/?{urlencode({'key': self.access_token})}"
+            self.qr_widget.set_connection(local_link, "Acceso local protegido")
         self.tunnel_button.setEnabled(False)
         self.status_label.setText("Conectando con Pinggy…")
         self.tunnel_thread = PinggyTunnelThread(
