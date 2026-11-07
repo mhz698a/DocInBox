@@ -16,8 +16,10 @@ class _StatCard(QFrame):
         layout.setSpacing(4)
         self.title_label = QLabel(title)
         self.title_label.setObjectName("StatLabel")
+        self.title_label.setStyleSheet("background: transparent;")
         self.value_label = QLabel("0")
         self.value_label.setObjectName("StatValue")
+        self.value_label.setStyleSheet("background: transparent;")
         layout.addWidget(self.title_label)
         layout.addWidget(self.value_label)
 

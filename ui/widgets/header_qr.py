@@ -28,16 +28,19 @@ class HeaderQrWidget(QFrame):
 
         self.mode_label = QLabel("SIN SERVIDOR")
         self.mode_label.setObjectName("QrMode")
+        self.mode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.mode_label)
 
         self.qr_label = QLabel("Inicia el receptor para generar el QR.")
         self.qr_label.setObjectName("QrImage")
         self.qr_label.setFixedSize(188, 188)
+        self.qr_label.setWordWrap(True)
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.qr_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.url_label = QLabel("El enlace aparecerá aquí.")
         self.url_label.setObjectName("QrUrl")
+        self.url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.url_label.setWordWrap(True)
         self.url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         root.addWidget(self.url_label)
