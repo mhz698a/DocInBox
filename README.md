@@ -34,6 +34,8 @@ Extensiones disponibles: doc, docx, xlsx, xls, ppt, pptx, pdf, png, jpg, jpeg, g
 
 La clave pública SSH se genera una sola vez en el directorio de datos de DocInBox. En el primer inicio, la ventana muestra la clave y abre la consola de Serveo para que se registre. La clave privada permanece en el equipo. Si se elimina o sustituye, será necesario registrar la nueva clave.
 
+Con cuentas gratuitas o túneles anónimos, Serveo puede mostrar una pantalla intermedia de advertencia al visitante. Si aparece, el destinatario debe continuar para llegar al formulario. Los túneles HTTP de cuentas de pago no muestran esa pantalla.
+
 Documentación de Serveo:
 - https://serveo.net/docs/
 - https://serveo.net/terms/
