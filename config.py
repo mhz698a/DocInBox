@@ -37,7 +37,7 @@ class Config:
         os.environ.get("DOCINBOX_DATA_DIR", str(_default_app_data_dir()))
     ).expanduser()
 
-    # Flask is deliberately loopback-only. Public access is provided by Serveo.
+    # Flask is deliberately loopback-only. Public access is provided by localhost.run.
     HOST = "127.0.0.1"
     PORT = _positive_int("DOCINBOX_PORT", 8765)
     MAX_UPLOAD_MB = _positive_int("DOCINBOX_MAX_UPLOAD_MB", 100)
