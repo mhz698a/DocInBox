@@ -207,7 +207,8 @@ class MainWindow(QMainWindow):
         if self.local_url:
             local_link = f"{self.local_url}/?{urlencode({'key': self.access_token})}"
             self.qr_widget.set_connection(local_link, "Acceso local protegido")
-        self.tunnel_button.setEnabled(False)
+        self.tunnel_button.setText("Cancelar conexión")
+        self.tunnel_button.setEnabled(True)
         self.status_label.setText("Conectando con Pinggy…")
         self.tunnel_thread = PinggyTunnelThread(
             self.server_thread.bound_port or Config.PORT,
