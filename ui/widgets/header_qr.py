@@ -33,6 +33,7 @@ class HeaderQrWidget(QFrame):
         self.qr_label = QLabel("Esperando conexión pública de Serveo.")
         self.qr_label.setObjectName("QrImage")
         self.qr_label.setFixedSize(188, 188)
+        self.qr_label.setWordWrap(True)
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.qr_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
