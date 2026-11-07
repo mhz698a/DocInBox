@@ -43,7 +43,7 @@ class ReceiverApplicationTests(unittest.TestCase):
         stylesheet = self.client.get("/assets/s.css")
         self.assertEqual(page.status_code, 200)
         self.assertIn("Envía tus documentos".encode("utf-8"), page.data)
-        self.assertIn(b'accept=".doc,.docx', page.data)
+        self.assertIn(b'accept=".avi,.doc,.docx', page.data)
         self.assertEqual(script.status_code, 200)
         self.assertEqual(stylesheet.status_code, 200)
 
