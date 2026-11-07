@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>DocInBox · Enviar documentos</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='s.css') }}">
+  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+<body>
+  <main class="page-shell">
+    <section class="upload-card" aria-labelledby="page-title">
+      <div class="brand-mark" aria-hidden="true">D</div>
+      <p class="eyebrow">RECEPCIÓN LOCAL DE DOCUMENTOS</p>
+      <h1 id="page-title">Envía tus documentos</h1>
+      <p class="intro">Selecciona los archivos que deseas enviar al equipo que está en esta red.</p>
+
+      <form id="upload-form">
+        <label class="drop-zone" for="file-input" id="drop-zone">
+          <span class="upload-icon" aria-hidden="true">↑</span>
+          <strong>Seleccionar archivos</strong>
+          <span class="drop-hint">También puedes arrastrarlos aquí</span>
+          <span class="file-limit">Hasta {{ max_upload_mb }} MB por archivo</span>
+          <input id="file-input" name="file" type="file" multiple required>
+        </label>
+
+        <div id="selected-files" class="selected-files" aria-live="polite"></div>
+        <button id="upload-button" class="primary-button" type="submit" disabled>
+          Enviar documentos
+        </button>
+      </form>
+
+      <section id="upload-results" class="upload-results" aria-live="polite" aria-label="Estado de envío"></section>
+      <p class="privacy-note">Los archivos se transfieren directamente al equipo receptor dentro de la red local.</p>
+    </section>
+    <footer>DocInBox · Transferencia dentro de la red local</footer>
+  </main>
+</body>
+</html>

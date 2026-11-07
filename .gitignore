@@ -13,4 +13,5 @@ __releases__/
 Output/
 .vscode/
 *.tmp
+*.part
 *.pfx
