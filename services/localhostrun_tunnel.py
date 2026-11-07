@@ -14,7 +14,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 # Captura las URLs asignadas por el servicio de Tunnelmole.
 _DOMAIN_PATTERN = re.compile(
-    r"https://[a-zA-Z0-9.-]+\\.(?:tunnelmole\\.net|tunnelmole\\.com)",
+    r"https://[a-zA-Z0-9.-]+\.(?:tunnelmole\.net|tunnelmole\.com)",
     re.IGNORECASE,
 )
 
