@@ -1,4 +1,4 @@
-"""Keyless Tunnelmole tunnel managed by a Qt worker thread."""
+"""Keyless localhost.run SSH tunnel managed by a Qt worker thread."""
 
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-# Captura las URLs asignadas por el servicio de Tunnelmole.
+
 _DOMAIN_PATTERN = re.compile(
-    r"https://[a-zA-Z0-9.-]+\.(?:tunnelmole\.net|tunnelmole\.com)(?![a-zA-Z0-9.-])",
+    r"(?<![a-z0-9.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"(?:localhost\.run|lhr\.life))(?![a-z0-9.-])",
     re.IGNORECASE,
 )
 
@@ -23,37 +24,59 @@ def _creation_flags() -> int:
     return getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 
 
-def resolve_tmole_binary(application_root: str | Path | None = None) -> Path:
-    """Return the Tunnelmole executable shipped in the project's bin directory."""
-    root = (
-        Path(application_root).expanduser().resolve()
-        if application_root is not None
-        else Path(__file__).resolve().parents[1]
-    )
-    executable = root / "bin" / "tmole.exe"
-    if not executable.is_file():
-        raise FileNotFoundError(
-            f"No se encontró el binario de Tunnelmole: {executable}"
-        )
-    return executable
-
-
-def build_tmole_command(
+def build_ssh_command(
+    ssh_executable: str,
     local_port: int,
-    application_root: str | Path | None = None,
+    known_hosts_path: str | Path,
+    ssh_port: int = 22,
 ) -> list[str]:
-    """Build the command using the bundled binary and the local receiver port."""
-    return [str(resolve_tmole_binary(application_root)), str(int(local_port))]
+    """Build the documented free nokey tunnel command without shell parsing."""
+    local_port = int(local_port)
+    ssh_port = int(ssh_port)
+    if not 1 <= local_port <= 65535:
+        raise ValueError("El puerto local debe estar entre 1 y 65535.")
+    if not 1 <= ssh_port <= 65535:
+        raise ValueError("El puerto SSH debe estar entre 1 y 65535.")
+
+    return [
+        ssh_executable,
+        "-T",
+        "-p",
+        str(ssh_port),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=60",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-o",
+        "ConnectTimeout=15",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        f"UserKnownHostsFile={Path(known_hosts_path)}",
+        "-R",
+        f"80:127.0.0.1:{local_port}",
+        "nokey@localhost.run",
+        "--",
+        "--no-inject-http-proxy-headers",
+    ]
 
 
-def extract_public_url(output: str) -> str | None:
-    """Extract a public Tunnelmole URL from one line of process output."""
-    match = _DOMAIN_PATTERN.search(output)
-    return match.group(0).rstrip(".,;") if match else None
+def extract_public_url(output_line: str) -> str | None:
+    """Extract only an HTTPS hostname belonging to localhost.run's free domains."""
+    match = _DOMAIN_PATTERN.search(output_line)
+    if not match:
+        return None
+
+    hostname = match.group(1).lower().rstrip(".")
+    return f"https://{hostname}"
 
 
 class LocalhostRunTunnelThread(QThread):
-    """Keep the Tunnelmole tunnel alive without blocking the Qt interface."""
+    """Keep the keyless SSH tunnel alive without blocking the Qt interface."""
 
     tunnel_ready = pyqtSignal(str)
     tunnel_error = pyqtSignal(str)
@@ -62,12 +85,14 @@ class LocalhostRunTunnelThread(QThread):
     def __init__(
         self,
         local_port: int,
-        known_hosts_path: str | Path = "",
+        known_hosts_path: str | Path,
         ssh_port: int = 22,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.local_port = int(local_port)
+        self.known_hosts_path = Path(known_hosts_path).expanduser()
+        self.ssh_port = int(ssh_port)
         self._stop_requested = threading.Event()
         self._process: subprocess.Popen[str] | None = None
 
@@ -78,8 +103,20 @@ class LocalhostRunTunnelThread(QThread):
         recent_output: list[str] = []
 
         try:
-            # Utiliza el ejecutable incluido en DocInBox, no una instalación global.
-            command = build_tmole_command(self.local_port)
+            ssh = shutil.which("ssh")
+            if not ssh:
+                raise RuntimeError(
+                    "No se encontró OpenSSH (ssh.exe). Instala OpenSSH Client "
+                    "desde las características opcionales de Windows."
+                )
+
+            self.known_hosts_path.parent.mkdir(parents=True, exist_ok=True)
+            command = build_ssh_command(
+                ssh,
+                self.local_port,
+                self.known_hosts_path,
+                self.ssh_port,
+            )
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.DEVNULL,
@@ -126,11 +163,16 @@ class LocalhostRunTunnelThread(QThread):
                     if not self._stop_requested.is_set():
                         if ready:
                             self.tunnel_error.emit(
-                                "La conexión con Tunnelmole se cerró de manera imprevista."
+                                "La conexión SSH con localhost.run se cerró. "
+                                "El receptor permanece privado."
                             )
                         else:
                             details = " | ".join(recent_output[-3:])
-                            message = "Tunnelmole no pudo establecer el enlace público."
+                            message = (
+                                "localhost.run no pudo establecer el túnel gratuito. "
+                                "Comprueba la conexión a Internet y que OpenSSH pueda "
+                                "conectarse al puerto SSH del servicio."
+                            )
                             if details:
                                 message += f" Detalle: {details}"
                             self.tunnel_error.emit(message)
@@ -138,7 +180,8 @@ class LocalhostRunTunnelThread(QThread):
 
                 if not ready and time.monotonic() >= startup_deadline:
                     raise RuntimeError(
-                        "Tunnelmole no devolvió una URL pública dentro del tiempo límite."
+                        "localhost.run no anunció una URL pública en 60 segundos. "
+                        "El receptor permanece privado."
                     )
 
         except Exception as exc:
@@ -146,10 +189,7 @@ class LocalhostRunTunnelThread(QThread):
                 self.tunnel_error.emit(str(exc))
         finally:
             if process is not None:
-                try:
-                    process.terminate()
-                except OSError:
-                    pass
+                self._terminate_process(process)
             self._process = None
             self.tunnel_stopped.emit()
 
@@ -161,4 +201,18 @@ class LocalhostRunTunnelThread(QThread):
             try:
                 process.terminate()
             except OSError:
+                pass
+
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen[str]) -> None:
+        if process.poll() is not None:
+            return
+        try:
+            process.terminate()
+            process.wait(timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                process.kill()
+                process.wait(timeout=3)
+            except (OSError, subprocess.TimeoutExpired):
                 pass
