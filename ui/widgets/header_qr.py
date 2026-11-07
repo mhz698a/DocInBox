@@ -67,8 +67,15 @@ class HeaderQrWidget(QFrame):
         try:
             import qrcode
 
-            image = qrcode.make(
-                self._url,
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=5,
+                border=2,
+            )
+            qr.add_data(self._url)
+            qr.make(fit=True)
+            image = qr.make_image(
                 fill_color="#111827",
                 back_color="#f5f7fb",
             ).convert("RGB")
