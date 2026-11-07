@@ -234,16 +234,22 @@ class MainWindow(QMainWindow):
 
     def _server_error(self, message: str) -> None:
         self._last_server_error = message
+        self.flask_app.config["ACCESS_TOKEN"] = ""
+        self.access_token = ""
         self.status_label.setText(message)
-        self.server_button.setText("Iniciar receptor")
-        self.server_button.setEnabled(True)
+        self.server_button.setText("Cerrando receptor…")
+        self.server_button.setEnabled(False)
         self.qr_widget.set_connection(None)
+        if self.serveo_thread and self.serveo_thread.isRunning():
+            self.serveo_thread.stop()
 
     def _server_stopped(self) -> None:
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
         self.public_hostname = ""
         self.qr_widget.set_connection(None)
+        if self.serveo_thread and self.serveo_thread.isRunning():
+            self.serveo_thread.stop()
         self._server_stop_pending = True
         self.server_button.setText("Cerrando túnel…")
         self.server_button.setEnabled(False)
