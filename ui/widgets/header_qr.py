@@ -28,11 +28,12 @@ class HeaderQrWidget(QFrame):
 
         self.mode_label = QLabel("ESPERANDO CONEXIÓN")
         self.mode_label.setObjectName("QrMode")
+        self.mode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.mode_label)
 
         self.qr_label = QLabel("Esperando la dirección pública temporal.")
         self.qr_label.setObjectName("QrImage")
-        self.qr_label.setFixedSize(188, 188)
+        self.qr_label.setFixedSize(346, 188)
         self.qr_label.setWordWrap(True)
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.qr_label, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -45,6 +46,7 @@ class HeaderQrWidget(QFrame):
         self.url_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
+        self.url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.url_label)
 
         buttons = QHBoxLayout()
