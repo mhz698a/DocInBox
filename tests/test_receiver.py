@@ -40,7 +40,7 @@ class ReceiverApplicationTests(unittest.TestCase):
         script = self.client.get("/assets/app.js")
         stylesheet = self.client.get("/assets/s.css")
         self.assertEqual(page.status_code, 200)
-        self.assertIn(b"Env\\xC3\\xADa tus documentos", page.data)
+        self.assertIn("Envía tus documentos".encode("utf-8"), page.data)
         self.assertEqual(script.status_code, 200)
         self.assertEqual(stylesheet.status_code, 200)
 
