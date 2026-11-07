@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from app_flask import create_app
+from config import Config
 from services.file_policy import SUPPORTED_EXTENSIONS
 
 
@@ -31,6 +32,9 @@ class ReceiverApplicationTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+
+    def test_receiver_binds_to_loopback_only(self) -> None:
+        self.assertEqual(Config.HOST, "127.0.0.1")
 
     def test_health_endpoint(self) -> None:
         response = self.client.get("/api/health")
