@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
         self.public_hostname = ""
         self.access_token = ""
         self._last_serveo_error = ""
+        self._server_stop_pending = False
 
         self.allowed_extensions = self._load_allowed_extensions()
         self.flask_app.config["ALLOWED_EXTENSIONS"] = set(self.allowed_extensions)
@@ -240,6 +241,15 @@ class MainWindow(QMainWindow):
         self.access_token = ""
         self.public_hostname = ""
         self.qr_widget.set_connection(None)
+
+        if self.serveo_thread and self.serveo_thread.isRunning():
+            self._server_stop_pending = True
+            self.server_button.setText("Cerrando túnel…")
+            self.server_button.setEnabled(False)
+            self.status_label.setText("Cerrando conexión privada…")
+            return
+
+        self._server_stop_pending = False
         self.server_button.setText("Iniciar receptor")
         self.server_button.setEnabled(True)
         self.status_label.setText("Receptor detenido.")
@@ -248,7 +258,10 @@ class MainWindow(QMainWindow):
         if self.server_thread and self.server_thread.isRunning():
             self.server_button.setEnabled(False)
             self.server_button.setText("Deteniendo…")
-            if self.serveo_thread and self.serveo_thread.isRunning():
+            self._server_stop_pending = bool(
+                self.serveo_thread and self.serveo_thread.isRunning()
+            )
+            if self._server_stop_pending:
                 self.serveo_thread.stop()
             self.flask_app.config["ACCESS_TOKEN"] = ""
             self.access_token = ""
@@ -335,6 +348,16 @@ class MainWindow(QMainWindow):
         self.access_token = ""
         self.public_hostname = ""
         self.qr_widget.set_connection(None)
+
+        if self._server_stop_pending and (
+            not self.server_thread or not self.server_thread.isRunning()
+        ):
+            self._server_stop_pending = False
+            self.server_button.setText("Iniciar receptor")
+            self.server_button.setEnabled(True)
+            self.status_label.setText("Receptor detenido.")
+            return
+
         if self.server_thread and self.server_thread.isRunning():
             if self._last_serveo_error:
                 self.status_label.setText(
