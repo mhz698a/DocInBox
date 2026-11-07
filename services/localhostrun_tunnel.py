@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import queue
 import re
-import shutil
 import subprocess
 import threading
 import time
@@ -13,17 +12,40 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-# Captura las URLs asignadas por el servicio de Tunnelmole
+# Captura las URLs asignadas por el servicio de Tunnelmole.
 _DOMAIN_PATTERN = re.compile(
-    r"https://[a-zA-Z0-9.-]+\.(?:tunnelmole\.net|tunnelmole\.com)",
+    r"https://[a-zA-Z0-9.-]+\\.(?:tunnelmole\\.net|tunnelmole\\.com)",
     re.IGNORECASE,
 )
+
 
 def _creation_flags() -> int:
     return getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 
+
+def resolve_tmole_binary(application_root: str | Path | None = None) -> Path:
+    """Return the Tunnelmole executable shipped in the project's bin directory."""
+    root = (
+        Path(application_root).expanduser().resolve()
+        if application_root is not None
+        else Path(__file__).resolve().parents[1]
+    )
+    executable = root / "bin" / "tmole.exe"
+    if not executable.is_file():
+        raise FileNotFoundError(
+            f"No se encontró el binario de Tunnelmole: {executable}"
+        )
+    return executable
+
+
+def extract_public_url(output: str) -> str | None:
+    """Extract a public Tunnelmole URL from one line of process output."""
+    match = _DOMAIN_PATTERN.search(output)
+    return match.group(0).rstrip(".,;") if match else None
+
+
 class LocalhostRunTunnelThread(QThread):
-    """Keep the keyless Tunnelmole tunnel alive without blocking the Qt interface."""
+    """Keep the Tunnelmole tunnel alive without blocking the Qt interface."""
 
     tunnel_ready = pyqtSignal(str)
     tunnel_error = pyqtSignal(str)
@@ -48,17 +70,10 @@ class LocalhostRunTunnelThread(QThread):
         recent_output: list[str] = []
 
         try:
-            # Buscamos el ejecutable de Tunnelmole
-            tmole_path = shutil.which("tmole") or shutil.which("tmole.cmd")
-            if not tmole_path:
-                raise RuntimeError(
-                    "No se encontró Tunnelmole. Por favor instala la herramienta "
-                    "ejecutando 'npm install -g tunnelmole' en tu terminal."
-                )
+            # Utiliza el ejecutable incluido en DocInBox, no una instalación global.
+            tmole_path = resolve_tmole_binary()
+            command = [str(tmole_path), str(self.local_port)]
 
-            # Comando directo para exponer el puerto sin configuraciones intermedias
-            command = [tmole_path, str(self.local_port)]
-            
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.DEVNULL,
@@ -95,22 +110,21 @@ class LocalhostRunTunnelThread(QThread):
                         recent_output.append(clean_line)
                         recent_output = recent_output[-6:]
 
-                    # Buscar patrón de URL en la salida de Tunnelmole
-                    match = _DOMAIN_PATTERN.search(line)
-                    if match and not ready:
+                    public_url = extract_public_url(line)
+                    if public_url and not ready:
                         ready = True
-                        self.tunnel_ready.emit(match.group(0))
+                        self.tunnel_ready.emit(public_url)
 
                 return_code = process.poll()
                 if return_code is not None:
                     if not self._stop_requested.is_set():
                         if ready:
                             self.tunnel_error.emit(
-                                "La conexión con el túnel se cerró de manera imprevista."
+                                "La conexión con Tunnelmole se cerró de manera imprevista."
                             )
                         else:
                             details = " | ".join(recent_output[-3:])
-                            message = "Tunnelmole no pudo establecer el enlace gratuito."
+                            message = "Tunnelmole no pudo establecer el enlace público."
                             if details:
                                 message += f" Detalle: {details}"
                             self.tunnel_error.emit(message)
