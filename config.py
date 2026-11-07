@@ -38,7 +38,7 @@ class Config:
     ).expanduser()
 
     # Flask is deliberately loopback-only. Public access is provided by Serveo.
-    HOST = os.environ.get("DOCINBOX_HOST", "127.0.0.1")
+    HOST = "127.0.0.1"
     PORT = _positive_int("DOCINBOX_PORT", 8765)
     MAX_UPLOAD_MB = _positive_int("DOCINBOX_MAX_UPLOAD_MB", 100)
     MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
