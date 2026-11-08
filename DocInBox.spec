@@ -97,7 +97,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[str(APP_ICON)],
+    icon=str(APP_ICON),
     contents_directory="_internal",
 )
 
