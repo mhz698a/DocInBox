@@ -54,7 +54,7 @@ Name: "{autoprograms}\DocInBox"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{
 Name: "{autodesktop}\DocInBox"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "Iniciar DocInBox"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "Iniciar DocInBox"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 ; El desinstalador elimina los binarios instalados, pero no elimina los datos
 ; del usuario almacenados por la aplicación en %LOCALAPPDATA%\DocInBox.
