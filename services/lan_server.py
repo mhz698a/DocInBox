@@ -1,4 +1,4 @@
-"""Qt worker that hosts the Flask receiver on loopback only."""
+"""Qt worker that hosts the Flask receiver on the local network."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from config import Config
 
 
 class LanServerThread(QThread):
-    """Run the private WSGI server without exposing the host's LAN address."""
+    """Run the WSGI server on all interfaces so LAN devices can connect."""
 
     server_ready = pyqtSignal(int)
     server_stopped = pyqtSignal()
