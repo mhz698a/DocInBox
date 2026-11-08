@@ -1,69 +1,48 @@
 from __future__ import annotations
 
-import tempfile
+import socket
 import unittest
-from pathlib import Path
+from unittest.mock import Mock, patch
 
-from services.localhostrun_tunnel import (
-    build_tmole_command,
-    extract_public_url,
-    resolve_tmole_binary,
-)
+from services.localhostrun_tunnel import build_lan_url, detect_lan_ipv4
 
 
-class TunnelmoleBinaryTests(unittest.TestCase):
-    def test_command_uses_bundled_tmole_exe_and_receiver_port(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            binary = root / "bin" / "tmole.exe"
-            binary.parent.mkdir(parents=True)
-            binary.write_bytes(b"MZ")
+class LanAddressTests(unittest.TestCase):
+    @patch("services.localhostrun_tunnel.socket.socket")
+    def test_detects_ipv4_selected_by_routing_table(self, socket_factory) -> None:
+        probe = Mock()
+        probe.getsockname.return_value = ("192.168.1.25", 0)
+        socket_factory.return_value = probe
 
-            command = build_tmole_command(8765, root)
+        self.assertEqual(detect_lan_ipv4(), "192.168.1.25")
+        socket_factory.assert_called_once_with(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect.assert_called_once_with(("10.255.255.255", 1))
+        probe.close.assert_called_once()
 
-            self.assertEqual(command, [str(binary.resolve()), "8765"])
+    @patch("services.localhostrun_tunnel.socket.socket")
+    def test_falls_back_to_loopback_when_no_lan_route_is_available(
+        self, socket_factory
+    ) -> None:
+        probe = Mock()
+        probe.connect.side_effect = OSError("No route")
+        socket_factory.return_value = probe
 
-    def test_resolves_tmole_binary_from_project_bin_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            binary = root / "bin" / "tmole.exe"
-            binary.parent.mkdir(parents=True)
-            binary.write_bytes(b"MZ")
+        self.assertEqual(detect_lan_ipv4(), "127.0.0.1")
+        probe.close.assert_called_once()
 
-            self.assertEqual(resolve_tmole_binary(root), binary.resolve())
-
-    def test_missing_bundled_binary_raises_clear_error(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            with self.assertRaisesRegex(FileNotFoundError, "tmole.exe"):
-                resolve_tmole_binary(temporary_directory)
-
-
-class TunnelmoleUrlTests(unittest.TestCase):
-    def test_extracts_tunnelmole_net_url(self) -> None:
+    def test_builds_http_url_for_lan_devices(self) -> None:
         self.assertEqual(
-            extract_public_url(
-                "Forwarding HTTPS traffic from https://receive-123.tunnelmole.net"
-            ),
-            "https://receive-123.tunnelmole.net",
+            build_lan_url("192.168.1.25", 8765),
+            "http://192.168.1.25:8765",
         )
 
-    def test_extracts_tunnelmole_com_url(self) -> None:
-        self.assertEqual(
-            extract_public_url("https://receive-123.tunnelmole.com"),
-            "https://receive-123.tunnelmole.com",
-        )
-
-    def test_removes_trailing_output_punctuation(self) -> None:
-        self.assertEqual(
-            extract_public_url("Tunnel ready: https://receive-123.tunnelmole.net."),
-            "https://receive-123.tunnelmole.net",
-        )
-
-    def test_rejects_localhostrun_local_addresses_and_unrelated_domains(self) -> None:
-        self.assertIsNone(extract_public_url("https://example.localhost.run"))
-        self.assertIsNone(extract_public_url("http://127.0.0.1:8765"))
-        self.assertIsNone(extract_public_url("https://192.168.1.20"))
-        self.assertIsNone(extract_public_url("https://tunnelmole.net.evil.test"))
+    def test_rejects_invalid_addresses_and_ports(self) -> None:
+        with self.assertRaises(ValueError):
+            build_lan_url("not-an-ip", 8765)
+        with self.assertRaises(ValueError):
+            build_lan_url("192.168.1.25", 0)
+        with self.assertRaises(ValueError):
+            build_lan_url("192.168.1.25", 65536)
 
 
 if __name__ == "__main__":
