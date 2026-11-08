@@ -46,7 +46,7 @@ def _format_size(size: int) -> str:
 
 
 class MainWindow(QMainWindow):
-    """Desktop control panel for the private receiver and localhost.run access."""
+    """Desktop control panel for document reception over the local network."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -160,7 +160,7 @@ class MainWindow(QMainWindow):
         root.addLayout(header)
 
         self.status_label = QLabel(
-            "El servidor permanecerá privado hasta confirmar el túnel seguro."
+            "El receptor estará disponible para dispositivos de la red local cuando se inicie."
         )
         self.status_label.setObjectName("StatusLine")
         root.addWidget(self.status_label)
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
         self.access_token = ""
         self._clear_public_qr()
         self.qr_widget.set_connection(None)
-        self.status_label.setText("Iniciando receptor privado…")
+        self.status_label.setText("Iniciando receptor en la red local…")
         self.server_button.setText("Iniciando…")
         self.server_button.setEnabled(False)
 
@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
     def _server_ready(self, _bound_port: int) -> None:
         self._last_server_error = ""
         self.status_label.setText(
-            "Receptor privado activo · conectando con localhost.run sin cuenta ni claves de usuario…"
+            "Receptor activo · detectando la dirección IPv4 de la red local…"
         )
         self.server_button.setText("Detener receptor")
         self.server_button.setEnabled(True)
@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
         if self.localhostrun_thread and self.localhostrun_thread.isRunning():
             self.localhostrun_thread.stop()
         self._server_stop_pending = True
-        self.server_button.setText("Cerrando túnel…")
+        self.server_button.setText("Cerrando receptor…")
         self.server_button.setEnabled(False)
         QTimer.singleShot(150, self._finalize_server_stop)
 
@@ -296,13 +296,13 @@ class MainWindow(QMainWindow):
             self.start_server()
 
     def _start_localhostrun_tunnel(self) -> None:
-        """Use a persistent static token and static LAN IP for the printed QR."""
+        """Use a persistent access token and detect the current LAN IPv4 address."""
         if not self.server_thread or not self.server_thread.isRunning():
             return
         if self.localhostrun_thread and self.localhostrun_thread.isRunning():
             return
         
-        # 1. Recuperar o generar un Token de acceso PERSISTENTE (para que el QR impreso nunca caduque)
+        # Recuperar o generar una clave persistente para el código QR.
         stored_token = self.settings.value("security/access_token", "")
         if not stored_token:
             stored_token = secrets.token_urlsafe(32)
@@ -313,9 +313,9 @@ class MainWindow(QMainWindow):
         self.flask_app.config["ACCESS_TOKEN"] = self.access_token
         self._last_tunnel_error = ""
         
-        self.status_label.setText("Cargando configuración de red local estática…")
+        self.status_label.setText("Detectando la dirección IPv4 de la red local…")
 
-        # Reutilizamos la estructura del hilo para pasar el puerto y obtener la IP estática
+        # El hilo detecta la IP de la interfaz de red utilizada por el sistema.
         self.localhostrun_thread = LocalhostRunTunnelThread(
             local_port=self.server_thread.bound_port or Config.PORT,
             parent=self,
@@ -329,10 +329,10 @@ class MainWindow(QMainWindow):
         public_link = f"{base_url.rstrip('/')}/?{urlencode({'key': self.access_token})}"
         self._public_qr_url = public_link
         self.print_qr_button.setEnabled(True)
-        self.qr_widget.set_connection(public_link, "Acceso HTTPS · localhost.run")
-        self.status_label.setText("Receptor activo · enlace HTTPS de localhost.run disponible.")
+        self.qr_widget.set_connection(public_link, "Acceso en red local · HTTP")
+        self.status_label.setText("Receptor activo · enlace HTTP disponible en la red local.")
         self.statusBar().showMessage(
-            "El QR contiene únicamente la dirección HTTPS pública temporal.",
+            "El QR contiene la dirección IPv4 local y una clave de acceso persistente.",
             6000,
         )
 
@@ -343,7 +343,7 @@ class MainWindow(QMainWindow):
         self._clear_public_qr()
         self.qr_widget.set_connection(None)
         self.status_label.setText(
-            "El receptor permanece privado porque no se pudo establecer el túnel."
+            "No se pudo detectar la dirección IPv4 para compartir el receptor en la red local."
         )
         self.statusBar().showMessage(message, 12000)
 
@@ -360,11 +360,11 @@ class MainWindow(QMainWindow):
         if self.server_thread and self.server_thread.isRunning():
             if self._last_tunnel_error:
                 self.status_label.setText(
-                    "Receptor privado activo · el túnel localhost.run no está disponible."
+                    "El receptor está activo, pero no se pudo detectar una dirección IPv4 de red local."
                 )
             else:
                 self.status_label.setText(
-                    "Receptor privado activo · conexión localhost.run detenida."
+                    "El detector de dirección de red local se detuvo."
                 )
 
     def _print_qr_pdf(self) -> None:
