@@ -2,7 +2,7 @@
 """PyInstaller one-folder build for the DocInBox Windows desktop application.
 
 Run from the repository root:
-    python -m PyInstaller --noconfirm --clean DocInBox.spec
+    python -m PyInstaller --noconfirm DocInBox.spec
 
 Only runtime resources are copied. Source tests, documentation, Git metadata,
 virtual environments, and build caches are intentionally left out.
