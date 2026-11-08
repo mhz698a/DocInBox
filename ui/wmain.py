@@ -279,23 +279,28 @@ class MainWindow(QMainWindow):
             self.start_server()
 
     def _start_localhostrun_tunnel(self) -> None:
-        """Start a keyless localhost.run tunnel after Flask binds to loopback."""
+        """Use a persistent static token and static LAN IP for the printed QR."""
         if not self.server_thread or not self.server_thread.isRunning():
             return
         if self.localhostrun_thread and self.localhostrun_thread.isRunning():
             return
-
-        self.access_token = secrets.token_urlsafe(32)
+        
+        # 1. Recuperar o generar un Token de acceso PERSISTENTE (para que el QR impreso nunca caduque)
+        stored_token = self.settings.value("security/access_token", "")
+        if not stored_token:
+            stored_token = secrets.token_urlsafe(32)
+            self.settings.setValue("security/access_token", stored_token)
+            self.settings.sync()
+        
+        self.access_token = stored_token
         self.flask_app.config["ACCESS_TOKEN"] = self.access_token
         self._last_tunnel_error = ""
-        self.status_label.setText(
-            "Solicitando una dirección HTTPS temporal a localhost.run…"
-        )
+        
+        self.status_label.setText("Cargando configuración de red local estática…")
 
+        # Reutilizamos la estructura del hilo para pasar el puerto y obtener la IP estática
         self.localhostrun_thread = LocalhostRunTunnelThread(
             local_port=self.server_thread.bound_port or Config.PORT,
-            known_hosts_path=Config.LOCALHOSTRUN_KNOWN_HOSTS,
-            ssh_port=Config.LOCALHOSTRUN_SSH_PORT,
             parent=self,
         )
         self.localhostrun_thread.tunnel_ready.connect(self._localhostrun_ready)

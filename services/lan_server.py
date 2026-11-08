@@ -20,7 +20,7 @@ class LanServerThread(QThread):
 
     def __init__(
         self,
-        host: str | None = None,
+        host: str | None = "0.0.0.0",  # Forzar 0.0.0.0 para aceptar la red local
         port: int | None = None,
         app=None,
         parent=None,
