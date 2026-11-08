@@ -15,6 +15,7 @@ DocInBox recibe documentos desde teléfonos y computadoras y permite administrar
 - Ventana de escritorio PyQt6 que inicia el receptor automáticamente.
 - Tabla con búsqueda, filtro por estado y contadores.
 - Abrir documento, mostrar ubicación, copiar ruta, marcar como atendido/pendiente y eliminar.
+- Generar un PDF imprimible del código QR de acceso activo; permite elegir dónde guardarlo y abrirlo al terminar.
 - Al abrir la aplicación, si existen documentos de sesiones anteriores se pregunta si se desea limpiar la bandeja. La limpieza elimina los archivos y sus registros; no se puede deshacer. Si se elige No, los documentos se conservan.
 - Si algún archivo no puede eliminarse, su registro permanece para permitir una limpieza posterior.
 
