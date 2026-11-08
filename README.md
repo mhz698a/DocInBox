@@ -64,7 +64,7 @@ Además de los requisitos anteriores:
 - Windows x64.
 - Python x64.
 - PyInstaller, instalado mediante requirements-build.txt.
-- Inno Setup 6 con ISCC.exe.
+- Inno Setup 7 con ISCC.exe.
 
 ## Uso
 
