@@ -86,6 +86,36 @@ Este modo no genera túnel y no permite recibir archivos desde otros dispositivo
 | DOCINBOX_DATABASE_PATH | DATA_DIR/inbox.sqlite3 | Base de datos SQLite. |
 | DOCINBOX_LOCALHOSTRUN_SSH_PORT | 22 | Puerto SSH de localhost.run. |
 
+## Crear instalador para Windows x64
+
+El instalador coloca DocInBox en `Program Files` y crea un acceso directo en el menú Inicio. El icono del escritorio es opcional. La aplicación guarda su base de datos, documentos recibidos y preferencias en el perfil del usuario, fuera del directorio de instalación; esos datos se conservan al desinstalar.
+
+La compilación se debe realizar en Windows x64 con Python de 64 bits:
+
+1. Crear y activar un entorno de compilación:
+
+       py -3.12 -m venv .venv-build
+       .venv-build\\Scripts\\activate
+
+2. Instalar las dependencias de ejecución y PyInstaller:
+
+       python -m pip install --upgrade pip
+       python -m pip install -r requirements-build.txt
+
+3. Generar el paquete de una carpeta:
+
+       python -m PyInstaller --noconfirm --clean DocInBox.spec
+
+   El ejecutable y sus dependencias quedan en `dist/DocInBox`.
+
+4. Compilar `DocInBox.iss` con Inno Setup Compiler (o ejecutar `ISCC.exe DocInBox.iss` desde una terminal donde ISCC esté en PATH).
+
+   El instalador se genera en `Output/Installer`.
+
+El archivo `DocInBox.spec` agrega únicamente las plantillas web, la hoja de estilos de escritorio y el icono que usa la aplicación. PyInstaller analiza e incorpora las dependencias de ejecución; no se copian al instalador `tests`, documentación, `.git`, entornos virtuales, ni cachés de desarrollo. El bundle `onedir` evita la extracción temporal de una compilación `onefile` y permite instalar todos los archivos de ejecución directamente.
+
+Para cambiar la versión del instalador, actualizar `AppVersion` y `VersionInfoVersion` en `DocInBox.iss`.
+
 ## API inicial
 
 ### Estado
