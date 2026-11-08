@@ -1,0 +1,3 @@
+# Dependencias necesarias solo para generar el ejecutable de Windows.
+-r requirements.txt
+PyInstaller==6.22.3
