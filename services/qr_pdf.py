@@ -49,7 +49,7 @@ def generate_qr_pdf(public_url: str, output_path: str | Path) -> Path:
         page = document.new_page(width=_PAGE_WIDTH, height=_PAGE_HEIGHT)
         page.draw_rect(page.rect, color=None, fill=(1, 1, 1), overlay=False)
 
-        title = "DocInBox"
+        title = "Recepcion de documentos"
         title_width = fitz.get_text_length(title, fontname="hebo", fontsize=27)
         page.insert_text(
             ((_PAGE_WIDTH - title_width) / 2, 76),
@@ -118,7 +118,7 @@ def generate_qr_pdf(public_url: str, output_path: str | Path) -> Path:
         if remaining < 0:
             raise ValueError("La dirección es demasiado larga para incluirla en el PDF.")
 
-        footer = "Enlace de acceso de DocInBox"
+        footer = "Enlace de acceso"
         footer_width = fitz.get_text_length(footer, fontname="helv", fontsize=8)
         page.insert_text(
             ((_PAGE_WIDTH - footer_width) / 2, 746),
@@ -130,7 +130,7 @@ def generate_qr_pdf(public_url: str, output_path: str | Path) -> Path:
 
         document.set_metadata(
             {
-                "title": "Codigo QR de acceso - DocInBox",
+                "title": "Codigo QR de acceso - Centro de computo",
                 "author": "DocInBox",
                 "subject": "Codigo QR para abrir el formulario de recepcion",
             }

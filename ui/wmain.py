@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from PyQt6.QtCore import QSettings, QTimer, QUrl
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtGui import QDesktopServices, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app_flask import create_app
-from config import Config
+from config import Config, get_program_path
 from services.file_policy import SUPPORTED_EXTENSIONS, normalized_extensions
 from services.file_watcher import InboxWatcher
 from services.lan_server import LanServerThread
@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("DocInBox")
+        self.setWindowTitle("Recepcion de documentos - DocInBox")
         self.resize(1180, 760)
         self.setMinimumSize(900, 620)
 
@@ -135,9 +135,9 @@ class MainWindow(QMainWindow):
 
         header = QHBoxLayout()
         title_box = QVBoxLayout()
-        title = QLabel("DocInBox")
+        title = QLabel("Recepcion de documentos")
         title.setObjectName("AppTitle")
-        subtitle = QLabel("Administración de documentos recibidos")
+        subtitle = QLabel("Documentos recibidos para visualizar")
         subtitle.setObjectName("AppSubtitle")
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
@@ -558,6 +558,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(get_program_path()+"/assets/icon.ico"))
     app.setApplicationName("DocInBox")
     app.setOrganizationName("DocInBox")
     window = MainWindow()

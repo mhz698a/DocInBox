@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 import sys
+import ctypes
 
+myappid = "doc_in_box.doc_in_box.doc_in_box.1.0"
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except Exception:
+    pass
 
 def main() -> int:
     if "--web-only" in sys.argv:

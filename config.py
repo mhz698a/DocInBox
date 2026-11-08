@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import os, sys
 from pathlib import Path
 
 from services.file_policy import SUPPORTED_EXTENSIONS
@@ -29,6 +29,19 @@ def _positive_int(name: str, default: int) -> int:
         raise ValueError(f"{name} debe ser mayor que cero.")
     return value
 
+def get_program_path():
+    """
+    Retorna la ruta absoluta del directorio donde se encuentra el script,
+    funcionando tanto en modo de desarrollo (.py) como compilado (.exe).
+    """
+    # Si el script está compilado, sys tiene el atributo 'frozen'
+    if getattr(sys, 'frozen', False):
+        # PyInstaller guarda la ruta del ejecutable en sys.executable
+        # Si usas _MEIPASS, apuntaría a la carpeta temporal de extracción
+        return os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        # En modo no compilado, usamos __file__
+        return os.path.dirname(os.path.abspath(__file__))
 
 class Config:
     """Application defaults; environment variables can override each value."""
