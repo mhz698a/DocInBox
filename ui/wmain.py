@@ -397,8 +397,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self,
                 "No se pudo generar el PDF",
-                f"No fue posible crear el documento del código QR:
-{exc}",
+                f"No fue posible crear el documento del código QR:\n{exc}",
             )
             return
 
@@ -406,10 +405,7 @@ class MainWindow(QMainWindow):
             self,
             "PDF generado",
             (
-                f"El código QR se guardó correctamente en:
-{generated_path}
-
-"
+                f"El código QR se guardó correctamente en:\n{generated_path}\n\n"
                 "¿Deseas abrir el documento ahora?"
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
