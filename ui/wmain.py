@@ -13,6 +13,7 @@ from PyQt6.QtCore import QSettings, QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -28,6 +29,7 @@ from services.file_policy import SUPPORTED_EXTENSIONS, normalized_extensions
 from services.file_watcher import InboxWatcher
 from services.lan_server import LanServerThread
 from services.localhostrun_tunnel import LocalhostRunTunnelThread
+from services.qr_pdf import generate_qr_pdf
 from ui.widgets.docs_table_tab import DocsTableTab
 from ui.widgets.file_types_dialog import FileTypesDialog
 from ui.widgets.header_qr import HeaderQrWidget
@@ -58,6 +60,7 @@ class MainWindow(QMainWindow):
         self.server_thread: LanServerThread | None = None
         self.localhostrun_thread: LocalhostRunTunnelThread | None = None
         self.access_token = ""
+        self._public_qr_url = ""
         self._last_tunnel_error = ""
         self._last_server_error = ""
         self._server_stop_pending = False
@@ -149,6 +152,11 @@ class MainWindow(QMainWindow):
         self.file_types_button = QPushButton("Permitir tipo de archivos")
         self.file_types_button.clicked.connect(self._configure_file_types)
         header.addWidget(self.file_types_button)
+
+        self.print_qr_button = QPushButton("Imprimir Código QR")
+        self.print_qr_button.setEnabled(False)
+        self.print_qr_button.clicked.connect(self._print_qr_pdf)
+        header.addWidget(self.print_qr_button)
         root.addLayout(header)
 
         self.status_label = QLabel(
@@ -203,12 +211,18 @@ class MainWindow(QMainWindow):
         except OSError:
             self.statusBar().showMessage("No se pudo cargar ui/styles.css")
 
+    def _clear_public_qr(self) -> None:
+        self._public_qr_url = ""
+        if hasattr(self, "print_qr_button"):
+            self.print_qr_button.setEnabled(False)
+
     def start_server(self) -> None:
         if self.server_thread and self.server_thread.isRunning():
             return
 
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
+        self._clear_public_qr()
         self.qr_widget.set_connection(None)
         self.status_label.setText("Iniciando receptor privado…")
         self.server_button.setText("Iniciando…")
@@ -233,6 +247,7 @@ class MainWindow(QMainWindow):
         self._last_server_error = message
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
+        self._clear_public_qr()
         self.status_label.setText(message)
         self.server_button.setText("Cerrando receptor…")
         self.server_button.setEnabled(False)
@@ -243,6 +258,7 @@ class MainWindow(QMainWindow):
     def _server_stopped(self) -> None:
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
+        self._clear_public_qr()
         self.qr_widget.set_connection(None)
         if self.localhostrun_thread and self.localhostrun_thread.isRunning():
             self.localhostrun_thread.stop()
@@ -267,6 +283,7 @@ class MainWindow(QMainWindow):
         if self.server_thread and self.server_thread.isRunning():
             self.server_button.setEnabled(False)
             self.server_button.setText("Deteniendo…")
+            self._clear_public_qr()
             self._server_stop_pending = bool(
                 self.localhostrun_thread and self.localhostrun_thread.isRunning()
             )
@@ -310,6 +327,8 @@ class MainWindow(QMainWindow):
 
     def _localhostrun_ready(self, base_url: str) -> None:
         public_link = f"{base_url.rstrip('/')}/?{urlencode({'key': self.access_token})}"
+        self._public_qr_url = public_link
+        self.print_qr_button.setEnabled(True)
         self.qr_widget.set_connection(public_link, "Acceso HTTPS · localhost.run")
         self.status_label.setText("Receptor activo · enlace HTTPS de localhost.run disponible.")
         self.statusBar().showMessage(
@@ -321,6 +340,7 @@ class MainWindow(QMainWindow):
         self._last_tunnel_error = message
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
+        self._clear_public_qr()
         self.qr_widget.set_connection(None)
         self.status_label.setText(
             "El receptor permanece privado porque no se pudo establecer el túnel."
@@ -330,6 +350,7 @@ class MainWindow(QMainWindow):
     def _localhostrun_stopped(self) -> None:
         self.flask_app.config["ACCESS_TOKEN"] = ""
         self.access_token = ""
+        self._clear_public_qr()
         self.qr_widget.set_connection(None)
 
         if self._server_stop_pending:
@@ -345,6 +366,69 @@ class MainWindow(QMainWindow):
                 self.status_label.setText(
                     "Receptor privado activo · conexión localhost.run detenida."
                 )
+
+    def _print_qr_pdf(self) -> None:
+        """Save the active receiver QR to PDF and optionally open it."""
+        public_url = self._public_qr_url.strip()
+        if not public_url:
+            self._clear_public_qr()
+            self.statusBar().showMessage(
+                "No hay un código QR público disponible para imprimir.", 5000
+            )
+            return
+
+        default_path = Path.home() / "DocInBox_Codigo_QR.pdf"
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar código QR como PDF",
+            str(default_path),
+            "Documento PDF (*.pdf)",
+        )
+        if not selected_path:
+            return
+
+        output_path = Path(selected_path).expanduser()
+        if output_path.suffix.lower() != ".pdf":
+            output_path = output_path.with_suffix(".pdf")
+
+        try:
+            generated_path = generate_qr_pdf(public_url, output_path)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "No se pudo generar el PDF",
+                f"No fue posible crear el documento del código QR:
+{exc}",
+            )
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "PDF generado",
+            (
+                f"El código QR se guardó correctamente en:
+{generated_path}
+
+"
+                "¿Deseas abrir el documento ahora?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            opened = QDesktopServices.openUrl(
+                QUrl.fromLocalFile(str(generated_path))
+            )
+            if not opened:
+                QMessageBox.warning(
+                    self,
+                    "No se pudo abrir el PDF",
+                    "El documento se generó, pero Windows no pudo abrirlo.",
+                )
+        else:
+            self.statusBar().showMessage(
+                f"PDF del código QR guardado en {generated_path}", 7000
+            )
 
     def _configure_file_types(self) -> None:
         dialog = FileTypesDialog(self.allowed_extensions, self)
