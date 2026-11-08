@@ -9,6 +9,12 @@ virtual environments, and build caches are intentionally left out.
 """
 
 from pathlib import Path
+import sys
+
+if sys.platform != "win32" or sys.maxsize <= 2**32:
+    raise RuntimeError(
+        "DocInBox.spec must be built on Windows with 64-bit Python."
+    )
 
 ROOT = Path(SPECPATH).resolve()
 
