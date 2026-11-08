@@ -22,8 +22,8 @@ def generate_qr_pdf(public_url: str, output_path: str | Path) -> Path:
     if not url:
         raise ValueError("No hay una dirección pública para generar el código QR.")
     parsed = urlsplit(url)
-    if parsed.scheme.lower() != "https" or not parsed.netloc:
-        raise ValueError("La dirección del código QR debe ser una URL HTTPS válida.")
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("La dirección del código QR debe ser una URL HTTP o HTTPS válida.")
 
     destination = Path(output_path).expanduser().resolve()
     if destination.suffix.lower() != ".pdf":
@@ -118,7 +118,7 @@ def generate_qr_pdf(public_url: str, output_path: str | Path) -> Path:
         if remaining < 0:
             raise ValueError("La dirección es demasiado larga para incluirla en el PDF.")
 
-        footer = "Acceso publico de DocInBox"
+        footer = "Enlace de acceso de DocInBox"
         footer_width = fitz.get_text_length(footer, fontname="helv", fontsize=8)
         page.insert_text(
             ((_PAGE_WIDTH - footer_width) / 2, 746),
