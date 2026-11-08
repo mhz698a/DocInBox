@@ -1,6 +1,6 @@
 ; Script for the DocInBox Windows x64 installer.
 ; Build the application first with:
-;   python -m PyInstaller --noconfirm --clean DocInBox.spec
+;   python -m PyInstaller --noconfirm DocInBox.spec
 ; Then compile this script with Inno Setup Compiler (ISCC.exe).
 
 #define AppName "DocInBox"
