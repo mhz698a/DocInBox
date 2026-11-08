@@ -1,158 +1,303 @@
-# DocInBox — Recepción y administración de documentos
+# DocInBox
 
-DocInBox recibe documentos desde teléfonos y computadoras y permite administrarlos desde una aplicación de escritorio PyQt6. Flask escucha exclusivamente en localhost y localhost.run proporciona una dirección HTTPS pública temporal.
+**DocInBox** es una aplicación de escritorio para recibir documentos desde teléfonos y computadoras conectados a una red local y administrarlos desde una bandeja centralizada.
 
-## Funcionalidad
+Combina una interfaz de administración construida con **PyQt6**, un servidor HTTP **Flask**, almacenamiento de archivos en el equipo anfitrión y un catálogo **SQLite**. El receptor web permite seleccionar o arrastrar varios archivos desde un navegador; la aplicación de escritorio registra las llegadas y permite buscarlas, clasificarlas, abrirlas, copiarlas o eliminarlas.
 
-### Receptor web
-- Página adaptable para seleccionar o arrastrar varios documentos.
-- Recepción individual de archivos, con registro de cada llegada en SQLite.
-- Tamaño máximo configurable, nombres saneados y nombres internos únicos.
-- Validación de extensiones tanto en el navegador como en el endpoint Flask.
-- Almacenamiento fuera del directorio del proyecto.
+> **Alcance de red actual:** la versión de esta rama utiliza una dirección IPv4 local y HTTP. No inicia un túnel externo ni publica el receptor en Internet. Los dispositivos que envían documentos deben poder alcanzar el equipo anfitrión por la red local.
 
-### Administración de llegadas
-- Ventana de escritorio PyQt6 que inicia el receptor automáticamente.
-- Tabla con búsqueda, filtro por estado y contadores.
-- Abrir documento, mostrar ubicación, copiar ruta, marcar como atendido/pendiente y eliminar.
-- Generar un PDF imprimible del código QR de acceso activo; permite elegir dónde guardarlo y abrirlo al terminar.
-- Al abrir la aplicación, si existen documentos de sesiones anteriores se pregunta si se desea limpiar la bandeja. La limpieza elimina los archivos y sus registros; no se puede deshacer. Si se elige No, los documentos se conservan.
-- Si algún archivo no puede eliminarse, su registro permanece para permitir una limpieza posterior.
+## Funcionalidades
 
-### Tipos de archivo permitidos
-El botón Permitir tipo de archivos abre una lista de casillas configurables. Los valores se guardan en QSettings y se aplican inmediatamente en el servidor.
+### Recepción desde el navegador
 
-Extensiones disponibles: doc, docx, xlsx, xls, ppt, pptx, pdf, png, jpg, jpeg, gif, txt, mp3, wav, flac, m4a, mp4, mkv y avi.
+- Página adaptable para teléfonos, tabletas y computadoras.
+- Selección múltiple de archivos y soporte para arrastrar y soltar.
+- Envío individual de los archivos seleccionados y presentación del resultado de cada envío.
+- Validación de la clave de acceso, la extensión, el nombre y el tamaño de cada archivo.
+- Nombres internos únicos para que dos archivos con el mismo nombre no se sobrescriban.
+- Registro de cada llegada en SQLite y almacenamiento fuera de la carpeta de instalación.
 
-### Túnel SSH mediante localhost.run
-- Se inicia automáticamente al arrancar el receptor.
-- Flask escucha únicamente en 127.0.0.1; no se enlaza a la interfaz de red local.
-- OpenSSH ejecuta el túnel dentro de un QThread y sin abrir una ventana de consola.
-- Se usa el usuario documentado nokey@localhost.run para el plan gratuito; no se generan claves SSH de usuario ni se requiere registro.
-- El QR muestra exclusivamente la URL HTTPS temporal anunciada por localhost.run.
-- Se aceptan los dominios gratuitos documentados bajo localhost.run y lhr.life; la dirección se detecta desde la salida de SSH.
-- La clave del servidor SSH se conserva mediante StrictHostKeyChecking=accept-new: la primera conexión se recuerda automáticamente y los cambios posteriores se rechazan.
-- Se desactiva la inyección de cabeceras HTTP de proxy. La página y POST /api/upload siguen protegidos por una clave temporal de DocInBox.
-- Si falla la conexión, el receptor permanece privado y no muestra la dirección local.
+### Administración desde el escritorio
 
-Los dominios gratuitos son temporales y pueden cambiar regularmente o después de unas horas. DocInBox vuelve a generar el QR con la dirección que entrega cada nueva conexión. La IP pública de origen sigue siendo visible para localhost.run como proveedor del túnel; los dispositivos que escanean el QR solo reciben la dirección pública y nunca la IP local del equipo.
+- Inicio automático del receptor al abrir la aplicación.
+- Tabla de documentos con búsqueda por nombre y filtro por estado.
+- Contadores de documentos recibidos, pendientes y atendidos.
+- Acciones para abrir el archivo, mostrar su ubicación, copiar su ruta, cambiar su estado y eliminarlo.
+- Configuración persistente de las extensiones permitidas.
+- Limpieza inicial opcional de los documentos de sesiones anteriores.
+- Generación de un PDF imprimible con el código QR de acceso activo.
 
-Documentación oficial:
-- https://localhost.run/docs
-- https://localhost.run/docs/faq
-- https://localhost.run/docs/security
-- https://localhost.run/docs/cli
+### Código QR y acceso local
+
+- Detecta la IPv4 que el sistema operativo selecciona para la salida de red.
+- Construye una URL HTTP con esa dirección y el puerto del receptor.
+- Genera una clave de acceso persistente en la configuración del usuario.
+- El botón **Imprimir Código QR** permite guardar el QR como PDF tamaño carta y abrirlo después de generarlo.
+- La dirección IP puede cambiar si cambia la configuración de la red. Para usar un QR impreso durante más tiempo, conviene reservar una IP para el equipo en el router mediante DHCP.
+
+### Extensiones permitidas de forma predeterminada
+
+doc, docx, xlsx, xls, ppt, pptx, pdf, png, jpg, jpeg, gif, txt, mp3, wav, flac, m4a, mp4, mkv, avi.
+
+La lista puede modificarse desde **Permitir tipo de archivos**. La configuración se guarda mediante QSettings y se aplica al servidor sin reiniciarlo.
+
 ## Requisitos
 
-- Python 3.12 o compatible.
-- Flask, PyQt6 y PyMuPDF.
-- qrcode con Pillow.
-- OpenSSH Client (ssh.exe).
+### Para ejecutar desde el código fuente
 
-En Windows, OpenSSH Client puede instalarse desde Características opcionales. Verifica su disponibilidad con:
+- Windows 10/11 (la interfaz y los scripts de instalación están orientados a Windows).
+- Python de 64 bits, preferentemente Python 3.12.
+- Las dependencias de requirements.txt.
 
-    ssh -V
+Instalación de dependencias:
 
-Instala las dependencias Python:
+~~~powershell
+py -3.12 -m venv .venv
+.venv/Scripts/python.exe -m pip install --upgrade pip
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+~~~
 
-    python -m pip install -r requirements.txt
+### Para compilar el instalador
 
-## Iniciar DocInBox
+Además de los requisitos anteriores:
 
-    python app.py
+- Windows x64.
+- Python x64.
+- PyInstaller, instalado mediante requirements-build.txt.
+- Inno Setup 6 con ISCC.exe.
 
-La aplicación inicia Flask en localhost y crea automáticamente el túnel SSH sin cuenta ni registro. Cuando localhost.run anuncie la dirección HTTPS temporal, aparecerá el QR público.
+## Uso
 
-Para iniciar únicamente Flask en modo de desarrollo local:
+### 1. Iniciar el receptor
 
-    python app.py --web-only
+Desde la carpeta raíz del proyecto:
 
-Este modo no genera túnel y no permite recibir archivos desde otros dispositivos.
+~~~powershell
+python app.py
+~~~
 
-## Datos locales en Windows
+La aplicación abre la ventana de administración, inicia Flask y detecta la dirección IPv4 local. Cuando termina la detección, muestra el enlace y el código QR.
 
-- Documentos: %LOCALAPPDATA%/DocInBox/Received
-- Base de datos: %LOCALAPPDATA%/DocInBox/inbox.sqlite3
-- Clave de host SSH aprendida en la primera conexión: %LOCALAPPDATA%/DocInBox/ssh/localhostrun_known_hosts
+### 2. Conectar un dispositivo
 
-## Variables de entorno
+1. Conecta el teléfono o la computadora a la misma red local que el equipo que ejecuta DocInBox.
+2. Escanea el código QR o abre el enlace mostrado en la ventana.
+3. Selecciona o arrastra los documentos que deseas enviar.
+4. Pulsa **Enviar documentos** y revisa el resultado de cada archivo.
+5. Las llegadas aparecen en la tabla de DocInBox.
+
+La red Wi-Fi, VLAN o las reglas del firewall deben permitir que el dispositivo alcance la dirección IPv4 del equipo anfitrión y el puerto configurado. La dirección 127.0.0.1 solo sirve dentro del propio equipo; si aparece en el QR, la detección de la IP LAN no encontró una interfaz utilizable.
+
+### 3. Administrar documentos
+
+Selecciona una fila de la tabla para habilitar las acciones inferiores:
+
+- **Abrir documento:** abre el archivo con la aplicación predeterminada de Windows.
+- **Mostrar ubicación:** abre el Explorador y selecciona el archivo.
+- **Copiar ruta:** copia la ruta absoluta.
+- **Marcar como atendido / Marcar como pendiente:** cambia el estado guardado en SQLite.
+- **Eliminar:** pide confirmación y elimina permanentemente el archivo y su registro.
+
+El filtro permite mostrar todos los documentos, solo los pendientes o solo los atendidos. El buscador filtra por nombre.
+
+### 4. Configurar extensiones
+
+Pulsa **Permitir tipo de archivos**, marca las extensiones que se aceptarán y guarda los cambios. La validación se aplica tanto al selector web como al endpoint Flask. Si una extensión no está habilitada, el servidor responde con HTTP 415.
+
+### 5. Imprimir el código QR
+
+1. Espera a que el receptor termine de iniciar y aparezca el enlace.
+2. Pulsa **Imprimir Código QR**.
+3. Elige la ruta y el nombre del archivo PDF.
+4. Confirma si deseas abrir el PDF después de guardarlo.
+
+El PDF contiene un QR vectorial y la URL completa, incluida la clave de acceso. El QR impreso solo seguirá funcionando mientras la dirección IPv4 del equipo siga siendo la misma y el receptor esté activo.
+
+### 6. Detener el receptor
+
+Pulsa **Detener receptor**. El servidor deja de aceptar conexiones. Cerrar la ventana también detiene los hilos que administra la aplicación.
+
+### Modo web de desarrollo
+
+Para ejecutar únicamente Flask en el equipo local, sin la ventana PyQt6:
+
+~~~powershell
+python app.py --web-only
+~~~
+
+Este modo utiliza 127.0.0.1 y el puerto configurado. Es útil para probar el formulario desde el mismo equipo, pero no anuncia una dirección LAN ni permite que otros dispositivos se conecten directamente.
+
+## Red y seguridad
+
+El modo de escritorio crea el servidor Werkzeug con 0.0.0.0, es decir, escucha en todas las interfaces IPv4 disponibles. La URL del QR usa la IPv4 LAN detectada por el sistema. La accesibilidad real depende de la red, de las VLAN, de las reglas del firewall y del enrutamiento del entorno.
+
+**La comunicación actual usa HTTP sin TLS.** Esto significa que el contenido de los archivos y la clave de acceso no están cifrados durante el tránsito por la red local. Utiliza DocInBox únicamente en una red privada y de confianza. Evita redes Wi-Fi públicas o compartidas, y no configures un reenvío de puertos del router que exponga el puerto del receptor a Internet.
+
+La clave de acceso funciona como un secreto compartido:
+
+- Se genera cuando no existe una clave guardada y se conserva mediante QSettings.
+- Se incluye en el enlace del QR como parámetro key.
+- La página web entrega la clave al JavaScript y las cargas la presentan en la cabecera X-DocInBox-Key.
+- Cualquier persona que tenga el enlace o una copia del QR puede enviar archivos mientras el receptor esté activo.
+
+No hay cuentas individuales ni identificación de cada remitente. El endpoint GET /api/health es público y no requiere esa clave. La validación de tipos se basa en la extensión del nombre; no es un análisis antivirus ni una inspección completa del contenido del archivo.
+
+Para permitir el tráfico en Windows, configura el Firewall de Windows para aceptar el puerto TCP utilizado por DocInBox en el perfil **Privado**, según las políticas de tu red. No abras el acceso para redes públicas sin una evaluación de seguridad.
+
+## Datos y configuración
+
+Por defecto, en Windows los documentos y la base de datos se guardan fuera de Program Files:
+
+| Dato | Ubicación predeterminada |
+|---|---|
+| Archivos recibidos | %LOCALAPPDATA%/DocInBox/Received |
+| Base de datos | %LOCALAPPDATA%/DocInBox/inbox.sqlite3 |
+| Preferencias y clave de acceso | Almacenamiento de configuración del usuario mediante QSettings |
+
+Los datos del usuario no forman parte de la carpeta de instalación. El desinstalador elimina el programa instalado, no la bandeja del usuario.
+
+### Variables de entorno
 
 | Variable | Valor predeterminado | Descripción |
-|---|---:|---|
-| DOCINBOX_PORT | 8765 | Puerto TCP local. |
-| DOCINBOX_MAX_UPLOAD_MB | 100 | Tamaño máximo por archivo. |
-| DOCINBOX_DATA_DIR | Directorio de datos del usuario | Directorio base local. |
-| DOCINBOX_STORAGE_DIR | DATA_DIR/Received | Carpeta de archivos recibidos. |
-| DOCINBOX_DATABASE_PATH | DATA_DIR/inbox.sqlite3 | Base de datos SQLite. |
-| DOCINBOX_LOCALHOSTRUN_SSH_PORT | 22 | Puerto SSH de localhost.run. |
+|---|---|---|
+| DOCINBOX_PORT | 8765 | Puerto TCP del receptor. |
+| DOCINBOX_MAX_UPLOAD_MB | 100 | Tamaño máximo permitido por archivo, en MiB. |
+| DOCINBOX_DATA_DIR | %LOCALAPPDATA%/DocInBox | Directorio base de los datos del usuario. |
+| DOCINBOX_STORAGE_DIR | DATA_DIR/Received | Carpeta donde se guardan los archivos recibidos. |
+| DOCINBOX_DATABASE_PATH | DATA_DIR/inbox.sqlite3 | Archivo de base de datos SQLite. |
 
-## Crear instalador para Windows x64
+Las variables se deben definir antes de iniciar el proceso. DOCINBOX_STORAGE_DIR y DOCINBOX_DATABASE_PATH permiten separar la carpeta de archivos y la base de datos del directorio base.
 
-El instalador coloca DocInBox en `Program Files` y crea un acceso directo en el menú Inicio. El icono del escritorio es opcional. La aplicación guarda su base de datos, documentos recibidos y preferencias en el perfil del usuario, fuera del directorio de instalación; esos datos se conservan al desinstalar.
+## API del receptor
 
-La compilación se debe realizar en Windows x64 con Python de 64 bits:
+### Estado del servicio
 
-1. Crear y activar un entorno de compilación:
-
-       py -3.12 -m venv .venv-build
-       .venv-build\\Scripts\\activate
-
-2. Instalar las dependencias de ejecución y PyInstaller:
-
-       python -m pip install --upgrade pip
-       python -m pip install -r requirements-build.txt
-
-3. Generar el paquete de una carpeta:
-
-       python -m PyInstaller --noconfirm DocInBox.spec
-
-   El ejecutable y sus dependencias quedan en `dist/DocInBox`.
-
-4. Compilar `DocInBox.iss` con Inno Setup Compiler (o ejecutar `ISCC.exe DocInBox.iss` desde una terminal donde ISCC esté en PATH).
-
-   El instalador se genera en `Output/Installer`.
-
-El archivo `DocInBox.spec` agrega únicamente las plantillas web, la hoja de estilos de escritorio y el icono que usa la aplicación. El comando normal conserva las cachés entre compilaciones; para una reconstrucción limpia puntual se puede añadir `--clean`. PyInstaller analiza e incorpora las dependencias de ejecución; no se copian al instalador `tests`, documentación, `.git`, entornos virtuales, ni cachés de desarrollo. El bundle `onedir` evita la extracción temporal de una compilación `onefile` y permite instalar todos los archivos de ejecución directamente.
-
-Para cambiar la versión del instalador, actualizar `AppVersion` y `VersionInfoVersion` en `DocInBox.iss`.
-
-## API inicial
-
-### Estado
-
+~~~http
 GET /api/health
+~~~
 
-    {"status": "ok", "service": "DocInBox Receiver"}
+Respuesta:
 
-### Recepción
+~~~json
+{
+  "status": "ok",
+  "service": "DocInBox Receiver"
+}
+~~~
 
-POST /api/upload con multipart/form-data y un campo llamado file. Cuando el túnel está activo, requiere X-DocInBox-Key.
+### Enviar un archivo
 
-Las extensiones no habilitadas reciben HTTP 415. Los archivos mayores al límite reciben HTTP 413.
+~~~http
+POST /api/upload
+~~~
+
+El cuerpo debe ser multipart/form-data con un campo llamado file. Cuando la clave de acceso está configurada, también se requiere:
+
+~~~http
+X-DocInBox-Key: <clave-del-QR>
+~~~
+
+Códigos de respuesta principales:
+
+| Código | Significado |
+|---|---|
+| 201 | Archivo guardado y registrado. |
+| 400 | Falta el archivo, está vacío o su nombre no es válido. |
+| 403 | Clave de acceso ausente o incorrecta. |
+| 413 | Archivo mayor que el límite configurado. |
+| 415 | Extensión no permitida. |
+| 500 | Falló el almacenamiento o el registro del documento. |
 
 ## Pruebas
 
-    python -m unittest discover -s tests -v
+Desde la raíz del repositorio:
 
-## Seguridad
+~~~powershell
+python -m unittest discover -s tests -v
+~~~
 
-El servidor Flask no escucha en la IP LAN: solo en loopback. La dirección pública es proporcionada por localhost.run y el acceso al formulario requiere una clave temporal. La URL HTTPS termina TLS en el proxy de localhost.run y el tráfico continúa cifrado por SSH hasta el servidor local. El proveedor conoce la IP pública de origen de la conexión SSH, pero los remitentes no reciben la IP local del equipo. La primera clave SSH del servidor se acepta y almacena automáticamente; una clave cambiada posteriormente provoca el rechazo del túnel.
+Las pruebas cubren la recepción Flask, la persistencia SQLite, la validación de extensiones, la detección de la IPv4 LAN, la generación del PDF QR y la resolución de recursos en modo PyInstaller.
 
-## Arquitectura
+## Compilación de Windows x64
 
-    Navegador móvil
-          | HTTPS
-          v
-    localhost.run reverse proxy
-          | SSH autenticado
-          v
-    127.0.0.1:8765
-          |
-          +--> Flask Receiver
-          |
-          +--> DocumentStore (SQLite)
-          |
-          +--> Received/
-          |
-          v
-    Bandeja de administración PyQt6
+El proyecto incluye DocInBox.spec para PyInstaller y DocInBox.iss para Inno Setup. La instalación resultante se coloca en **Program Files**.
+
+### 1. Crear el entorno de compilación
+
+En PowerShell, desde la raíz del proyecto:
+
+~~~powershell
+py -3.12 -m venv .venv-build
+.\.venv-build\Scripts\python.exe -m pip install --upgrade pip
+.\.venv-build\Scripts\python.exe -m pip install -r requirements-build.txt
+~~~
+
+requirements-build.txt instala las dependencias de ejecución y añade la versión fijada de PyInstaller. PyInstaller no se incorpora a las dependencias necesarias para ejecutar DocInBox desde Python.
+
+### 2. Generar el paquete con PyInstaller
+
+~~~powershell
+.\.venv-build\Scripts\python.exe -m PyInstaller --noconfirm DocInBox.spec
+~~~
+
+El ejecutable queda en:
+
+    dist/DocInBox/DocInBox.exe
+
+El modo onedir conserva el ejecutable y las bibliotecas necesarias en una carpeta de distribución. El archivo de especificación incluye únicamente los recursos de ejecución que no se descubren automáticamente: plantillas web, hoja de estilos de PyQt6 e icono. PyInstaller analiza las importaciones y reúne las dependencias detectadas. También excluye bindings Qt alternativos y paquetes de desarrollo que el programa no utiliza.
+
+Para una recompilación completa desde cero, se puede añadir --clean al comando. No se utiliza en la compilación normal para conservar la caché de análisis y acelerar las siguientes compilaciones.
+
+### 3. Probar el ejecutable
+
+Antes de crear el instalador, ejecuta:
+
+~~~powershell
+.\dist\DocInBox\DocInBox.exe
+~~~
+
+Comprueba el inicio de la ventana, la detección de la dirección LAN, la recepción desde otro dispositivo, las acciones de la bandeja y la generación del PDF.
+
+### 4. Crear el instalador
+
+Con Inno Setup 6 instalado y ISCC.exe disponible:
+
+~~~powershell
+ISCC.exe DocInBox.iss
+~~~
+
+El instalador se genera en:
+
+    Output/DocInBox_Setup_1.0.0.exe
+
+El script de Inno Setup:
+
+- Instala el contenido de dist/DocInBox en Program Files/DocInBox.
+- Crea un acceso directo en el menú Inicio.
+- Ofrece un acceso directo opcional en el escritorio.
+- Solicita privilegios de administrador para instalar.
+- Inicia la aplicación con las credenciales del usuario que ejecutó el instalador.
+- Conserva los datos de %LOCALAPPDATA%/DocInBox al desinstalar.
+
+Para cambiar la versión, actualiza AppVersion y VersionInfoVersion en DocInBox.iss.
+
+## Estructura del proyecto
+
+~~~text
+DocInBox/
+├── app.py
+├── app_flask.py
+├── config.py
+├── DocInBox.spec
+├── DocInBox.iss
+├── requirements.txt
+├── requirements-build.txt
+├── assets/
+├── docs/
+├── services/
+├── templates/
+├── tests/
+└── ui/
+~~~
+
+La guía de estudio de la arquitectura y del flujo interno está en [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md).
