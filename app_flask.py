@@ -1,4 +1,4 @@
-"""Private Flask receiver; public access is routed through authenticated Serveo."""
+"""Flask application for receiving and validating uploaded documents."""
 
 from __future__ import annotations
 
