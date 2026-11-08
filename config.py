@@ -29,19 +29,20 @@ def _positive_int(name: str, default: int) -> int:
         raise ValueError(f"{name} debe ser mayor que cero.")
     return value
 
-def get_program_path():
+def get_program_path() -> str:
     """
-    Retorna la ruta absoluta del directorio donde se encuentra el script,
-    funcionando tanto en modo de desarrollo (.py) como compilado (.exe).
+    Directorio base de los recursos empaquetados o del proyecto en desarrollo.
+
+    En PyInstaller, los recursos incluidos en el bundle onedir están en
+    sys._MEIPASS (normalmente la carpeta _internal), no junto al ejecutable.
     """
-    # Si el script está compilado, sys tiene el atributo 'frozen'
-    if getattr(sys, 'frozen', False):
-        # PyInstaller guarda la ruta del ejecutable en sys.executable
-        # Si usas _MEIPASS, apuntaría a la carpeta temporal de extracción
+    if getattr(sys, "frozen", False):
+        bundle_dir = getattr(sys, "_MEIPASS", None)
+        if bundle_dir:
+            return os.path.abspath(bundle_dir)
         return os.path.dirname(os.path.abspath(sys.executable))
-    else:
-        # En modo no compilado, usamos __file__
-        return os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.dirname(os.path.abspath(__file__))
 
 class Config:
     """Application defaults; environment variables can override each value."""
